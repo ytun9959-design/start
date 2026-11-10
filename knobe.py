@@ -52,7 +52,6 @@ VPS3_INBOUND_ID = 1
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# 🚨 ဒေတာ သိမ်းဆည်းရန် ဖိုင်များ
 DB_FILE = "users_coin.json"
 HISTORY_FILE = "purchase_history.json"
 ACTIVE_USERS_FILE = "active_users.json"
@@ -89,9 +88,6 @@ def save_data():
 
 load_data()
 
-# ============================================================
-# 🛠️ Functions
-# ============================================================
 def check_join(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
@@ -109,7 +105,6 @@ def get_vps_details(vps_choice):
     elif vps_choice == "3":
         return VPS3_URL, VPS3_PATH, VPS3_USER, VPS3_PASS, VPS3_IP, VPS3_PORT, VPS3_INBOUND_ID
 
-# 🚀 VPS တစ်ခုမှာ မရရင် နောက်တစ်ခုကို အလိုအလျောက် ပြောင်းသွားထုတ်ပေးမည့် Function
 def create_account_with_auto_switch(start_vps, username, days, gb):
     vps_order = [str(start_vps)]
     all_vps = ["1", "2", "3"]
@@ -130,7 +125,6 @@ def create_account_with_auto_switch(start_vps, username, days, gb):
             return False, result, current_vps 
             
     return False, "VPS အားလုံးတွင် ဒီအကောင့်နာမည် ရှိနေပြီး ဖြစ်ပါသည်။", start_vps
-
 
 def auto_create_vless_account(vps_choice, username, days, gb):
     try:
@@ -258,10 +252,6 @@ def delete_vless_account(vps_choice, username):
     except Exception as e:
         return False, str(e)
 
-# ============================================================
-# 📱 Telegram Bot Handlers
-# ============================================================
-
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = str(message.from_user.id)
@@ -313,11 +303,7 @@ def show_main_menu(chat_id, user_id):
         "👇 ရွေးချယ်ပါ -"
     )
     bot.send_message(chat_id, welcome_text, reply_markup=markup, parse_mode='Markdown')
-
-# ============================================================
-# Admin အတွက် အကောင့်ထုတ်ပေးသည့် စနစ်
-# ============================================================
-@bot.callback_query_handler(func=lambda call: call.data == "admin_create")
+    @bot.callback_query_handler(func=lambda call: call.data == "admin_create")
 def admin_create_menu(call):
     if call.from_user.id != ADMIN_ID: return
     
@@ -381,9 +367,6 @@ def admin_get_days(message, vps_num, account_name):
     else:
         bot.send_message(message.chat.id, f"⚠️ Error: အကောင့်ဖန်တီးမရပါ။\n{result}")
 
-# ============================================================
-# VPS အတွင်း အကောင့်စာရင်း စစ်ဆေးခြင်း နှင့် ဖျက်ခြင်း
-# ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "admin_check_vps_list")
 def admin_check_vps_list(call):
     if call.from_user.id != ADMIN_ID: return
@@ -428,7 +411,6 @@ def admin_process_check_list(call):
             expire_date = exp_mm.strftime('%Y-%m-%d %H:%M')
         msg += f"{i}. `{email}` (ကုန်ဆုံး: {expire_date})\n"
         
-    # ဖျက်မည့် VPS နံပါတ်ကို ဒီနေရာမှာ တွဲပေးလိုက်ပါမယ်
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(text=f"🗑️ VPS {vps_num} မှ အကောင့်ဖျက်ရန်", callback_data=f"delete_client_{vps_num}"))
     markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="admin_check_vps_list"))
@@ -444,16 +426,13 @@ def admin_process_check_list(call):
 def admin_delete_client_prompt(call):
     if call.from_user.id != ADMIN_ID: return
     
-    # ဖျက်မည့် VPS နံပါတ်ကို ယူပါ
     vps_num = call.data.replace("delete_client_", "")
     
-    # ဖျက်မည့် VPS နံပါတ်ကို သေချာအောင် ပြပေးပါ
     bot.send_message(
         call.message.chat.id, 
         f"🗑️ **VPS {vps_num}** မှ ဖျက်လိုသော အကောင့်နာမည်ကို ရိုက်ထည့်ပါ -"
     )
     
-    # နောက် step မှာ ဖျက်မည့် VPS နံပါတ်ကို ပါ တွဲပို့ပေးပါမယ်
     bot.register_next_step_handler_by_chat_id(call.message.chat.id, admin_delete_client, vps_num)
 
 def admin_delete_client(message, vps_num):
@@ -467,9 +446,6 @@ def admin_delete_client(message, vps_num):
     else:
         bot.send_message(message.chat.id, f"⚠️ {result}")
 
-# ============================================================
-# သူငယ်ချင်းအတွက် လင့်ခ်တောင်းသည့် စနစ်
-# ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "buy_for_friend")
 def buy_for_friend_menu(call):
     markup = types.InlineKeyboardMarkup()
@@ -507,12 +483,9 @@ def get_friend_id(message):
 @bot.callback_query_handler(func=lambda call: call.data == "back_main")
 def back_main(call):
     user_id = str(call.from_user.id)
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-        show_main_menu(call.message.chat.id, user_id)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    show_main_menu(call.message.chat.id, user_id)
 
-# ============================================================
-# Admin Commands
-# ============================================================
 @bot.message_handler(commands=['help'])
 def help_command(message):
     if message.from_user.id != ADMIN_ID: 
@@ -565,9 +538,6 @@ def history_command(message):
     else:
         bot.send_message(message.chat.id, msg, parse_mode='Markdown')
 
-# ============================================================
-# 🚀 Bot စတင်ခြင်း
-# ============================================================
 if __name__ == '__main__':
     print("🤖 Sky Blue Multi-VPS Bot စတင်နေသည်...")
     while True:
