@@ -13,7 +13,7 @@ import random
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ============================================================
-# ⚙️ သင့် VPS (၃) လုံး၏ အချက်အလက်များ (Port များကို 8080 ပြောင်းထားသည်)
+# ⚙️ သင့် VPS (၃) လုံး၏ အချက်အလက်များ
 # ============================================================
 BOT_TOKEN = "9058833367:AAGe4a5-PXaQAZJRnuy91AUc36U7zZH_2cM"
 ADMIN_ID = 5617375002
@@ -23,31 +23,31 @@ CHANNEL_LINK = "https://t.me/Skyblue021"
 CHANNEL_USERNAME = "@Skyblue021"
 BOT_LINK = "https://t.me/SkyBlueFreevpn_bot?start="
 
-# 🚨 VPS ၁ (FREE VPS 1)
-VPS1_URL = "https://157.85.96.190:8080"
+# 🚨 VPS ၁ (Port 2083)
+VPS1_URL = "https://157.85.96.190:2083"
 VPS1_PATH = "U6lL3EX7t2yq0q6"
 VPS1_USER = "eYJmFn4UNl"
 VPS1_PASS = "uLVwVpPaLb"
 VPS1_IP = "157.85.96.190"
-VPS1_PORT = "8080"
+VPS1_PORT = "2083"
 VPS1_INBOUND_ID = 1
 
-# 🚨 VPS ၂
-VPS2_URL = "https://119.10.142.16:8080"
+# 🚨 VPS ၂ (Port 41899)
+VPS2_URL = "https://119.10.142.16:41899"
 VPS2_PATH = "kB8wYdqzZ5DlzpP"
 VPS2_USER = "BVO9Zd0FtA"
 VPS2_PASS = "JkbeqV9i0q"
 VPS2_IP = "119.10.142.16"
-VPS2_PORT = "8080"
+VPS2_PORT = "41899"
 VPS2_INBOUND_ID = 1
 
-# 🚨 VPS ၃
-VPS3_URL = "https://103.114.203.136:8080"
+# 🚨 VPS ၃ (Port 2053)
+VPS3_URL = "https://103.114.203.136:2053"
 VPS3_PATH = "dLWnOXijDgbnRhW"
 VPS3_USER = "eIIC3epKrY"
 VPS3_PASS = "G6ifUF2Wi9"
 VPS3_IP = "103.114.203.136"
-VPS3_PORT = "8080"
+VPS3_PORT = "2053"
 VPS3_INBOUND_ID = 1
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -108,6 +108,29 @@ def get_vps_details(vps_choice):
         return VPS2_URL, VPS2_PATH, VPS2_USER, VPS2_PASS, VPS2_IP, VPS2_PORT, VPS2_INBOUND_ID
     elif vps_choice == "3":
         return VPS3_URL, VPS3_PATH, VPS3_USER, VPS3_PASS, VPS3_IP, VPS3_PORT, VPS3_INBOUND_ID
+
+# 🚀 VPS တစ်ခုမှာ မရရင် နောက်တစ်ခုကို အလိုအလျောက် ပြောင်းသွားထုတ်ပေးမည့် Function
+def create_account_with_auto_switch(start_vps, username, days, gb):
+    vps_order = [str(start_vps)]
+    all_vps = ["1", "2", "3"]
+    for v in all_vps:
+        if v not in vps_order:
+            vps_order.append(v)
+
+    for current_vps in vps_order:
+        success, result = auto_create_vless_account(current_vps, username, days, gb)
+        
+        if success:
+            return True, result, current_vps 
+            
+        if result == "Duplicate":
+            print(f"VPS {current_vps} တွင် '{username}' ရှိပြီးသားဖြစ်၍ နောက် VPS သို့ ပြောင်းမည်...")
+            continue 
+        else:
+            return False, result, current_vps 
+            
+    return False, "VPS အားလုံးတွင် ဒီအကောင့်နာမည် ရှိနေပြီး ဖြစ်ပါသည်။", start_vps
+
 
 def auto_create_vless_account(vps_choice, username, days, gb):
     try:
@@ -222,13 +245,13 @@ def delete_vless_account(vps_choice, username):
                 break
         
         if not target_uuid:
-            return False, f"'{username}' ဆိုတဲ့ အကောင့်ကို ရှာမတွေ့ပါ။"
+            return False, f"'{username}' ဆိုတဲ့ အကောင့်ကို VPS {vps_choice} မှာ ရှာမတွေ့ပါ။"
 
         del_url = f"{url}/{path}/panel/api/inbounds/{inbound_id}/delClient/{target_uuid}"
         res_del = session.post(del_url, timeout=15)
         
         if res_del.status_code == 200 and res_del.json().get("success"):
-            return True, f"'{username}' အကောင့်ကို အောင်မြင်စွာ ဖျက်လိုက်ပါပြီ။"
+            return True, f"'{username}' အကောင့်ကို VPS {vps_choice} မှ အောင်မြင်စွာ ဖျက်လိုက်ပါပြီ။"
         else:
             return False, f"ဖျက်လို့မရပါ: {res_del.text}"
             
@@ -342,13 +365,13 @@ def admin_get_days(message, vps_num, account_name):
     gb = days * 2
     bot.reply_to(message, "⏳ အကောင့်ဖန်တီးနေသည်...")
     
-    success, result = auto_create_vless_account(vps_num, account_name, days, gb)
+    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days, gb)
 
     if success:
         bot.send_message(
             message.chat.id, 
             f"🎉 **အကောင့်ဖန်တီးပြီးပါပြီ!**\n\n"
-            f"🌐 **VPS:** {vps_num}\n"
+            f"🌐 **ထုတ်ပေးလိုက်သည့် VPS:** VPS {final_vps}\n"
             f"📁 **အကောင့်:** `{account_name}`\n"
             f"⏳ **သက်တမ်း:** {days} ရက်\n"
             f"📦 **Data ပမာဏ:** {gb} GB\n\n"
@@ -359,7 +382,7 @@ def admin_get_days(message, vps_num, account_name):
         bot.send_message(message.chat.id, f"⚠️ Error: အကောင့်ဖန်တီးမရပါ။\n{result}")
 
 # ============================================================
-# VPS အတွင်း အကောင့်စာရင်း စစ်ဆေးခြင်း
+# VPS အတွင်း အကောင့်စာရင်း စစ်ဆေးခြင်း နှင့် ဖျက်ခြင်း
 # ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "admin_check_vps_list")
 def admin_check_vps_list(call):
@@ -405,8 +428,9 @@ def admin_process_check_list(call):
             expire_date = exp_mm.strftime('%Y-%m-%d %H:%M')
         msg += f"{i}. `{email}` (ကုန်ဆုံး: {expire_date})\n"
         
+    # ဖျက်မည့် VPS နံပါတ်ကို ဒီနေရာမှာ တွဲပေးလိုက်ပါမယ်
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🗑️ အကောင့်ဖျက်ရန်", callback_data=f"delete_client_{vps_num}"))
+    markup.add(types.InlineKeyboardButton(text=f"🗑️ VPS {vps_num} မှ အကောင့်ဖျက်ရန်", callback_data=f"delete_client_{vps_num}"))
     markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="admin_check_vps_list"))
     
     if len(msg) > 4000:
@@ -419,9 +443,17 @@ def admin_process_check_list(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_client_'))
 def admin_delete_client_prompt(call):
     if call.from_user.id != ADMIN_ID: return
+    
+    # ဖျက်မည့် VPS နံပါတ်ကို ယူပါ
     vps_num = call.data.replace("delete_client_", "")
     
-    bot.send_message(call.message.chat.id, f"🗑️ VPS {vps_num} မှ ဖျက်လိုသော အကောင့်နာမည်ကို ရိုက်ထည့်ပါ -")
+    # ဖျက်မည့် VPS နံပါတ်ကို သေချာအောင် ပြပေးပါ
+    bot.send_message(
+        call.message.chat.id, 
+        f"🗑️ **VPS {vps_num}** မှ ဖျက်လိုသော အကောင့်နာမည်ကို ရိုက်ထည့်ပါ -"
+    )
+    
+    # နောက် step မှာ ဖျက်မည့် VPS နံပါတ်ကို ပါ တွဲပို့ပေးပါမယ်
     bot.register_next_step_handler_by_chat_id(call.message.chat.id, admin_delete_client, vps_num)
 
 def admin_delete_client(message, vps_num):
@@ -475,8 +507,8 @@ def get_friend_id(message):
 @bot.callback_query_handler(func=lambda call: call.data == "back_main")
 def back_main(call):
     user_id = str(call.from_user.id)
-    bot.delete_message(call.message.chat.id, call.message.message_id)
-    show_main_menu(call.message.chat.id, user_id)
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        show_main_menu(call.message.chat.id, user_id)
 
 # ============================================================
 # Admin Commands
