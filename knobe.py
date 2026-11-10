@@ -303,7 +303,8 @@ def show_main_menu(chat_id, user_id):
         "👇 ရွေးချယ်ပါ -"
     )
     bot.send_message(chat_id, welcome_text, reply_markup=markup, parse_mode='Markdown')
-    @bot.callback_query_handler(func=lambda call: call.data == "admin_create")
+
+@bot.callback_query_handler(func=lambda call: call.data == "admin_create")
 def admin_create_menu(call):
     if call.from_user.id != ADMIN_ID: return
     
@@ -547,3 +548,4 @@ if __name__ == '__main__':
             print(f"Error တက်သွားပါသည်: {e}")
             print("5 စက္ကန့်အတွင်း ပြန်လည် စတင်ပါမည်...")
             time.sleep(5)
+
