@@ -514,7 +514,7 @@ def history_command(message):
     if not purchase_history:
         bot.reply_to(message, "📁 ဝယ်ယူမှု မှတ်တမ်း မရှိသေးပါ။")
         return
-        
+
     msg = "📋 **ဝယ်ယူမှု မှတ်တမ်း (မကြာသေးမီက)**\n\n"
     for item in purchase_history[-20:]:
         msg += (
