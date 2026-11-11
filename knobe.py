@@ -7,53 +7,51 @@ import json
 import urllib3
 import os
 import time
-import threading
-import random
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ============================================================
-# ⚙️ သင့် VPS (၃) လုံး၏ အချက်အလက်များ (Port များကို 8080 ပြောင်းထားသည်)
+# ⚙️ သင့် Bot ၏ အချက်အလက်များ
 # ============================================================
 BOT_TOKEN = "9058833367:AAGe4a5-PXaQAZJRnuy91AUc36U7zZH_2cM"
 ADMIN_ID = 5617375002
 ADMIN_CONTACT = "@Kenobe21" 
-
-# 🚨 ဒီနေရာမှာ သင့် Channel Link နဲ့ Username ကို ပြင်ထည့်ထားပါတယ်
-CHANNEL_LINK = "https://t.me/Skyblue021" 
+CHANNEL_LINK = "https://t.me/Skyblue021"
 CHANNEL_USERNAME = "@Skyblue021"
 BOT_LINK = "https://t.me/SkyBlueFreevpn_bot?start="
 
-# 🚨 VPS ၁ (FREE VPS 1)
-VPS1_URL = "https://157.85.96.190:8080"
+# ============================================================
+# 🌐 VPS အချက်အလက်များ
+# ============================================================
+VPS1_URL = "https://157.85.96.190:2083"
 VPS1_PATH = "U6lL3EX7t2yq0q6"
 VPS1_USER = "eYJmFn4UNl"
 VPS1_PASS = "uLVwVpPaLb"
 VPS1_IP = "157.85.96.190"
-VPS1_PORT = "8080"
+VPS1_PORT = "2083"
 VPS1_INBOUND_ID = 1
 
-# 🚨 VPS ၂
-VPS2_URL = "https://119.10.142.16:8080"
+VPS2_URL = "https://119.10.142.16:41899"
 VPS2_PATH = "kB8wYdqzZ5DlzpP"
 VPS2_USER = "BVO9Zd0FtA"
 VPS2_PASS = "JkbeqV9i0q"
 VPS2_IP = "119.10.142.16"
-VPS2_PORT = "8080"
+VPS2_PORT = "41899"
 VPS2_INBOUND_ID = 1
 
-# 🚨 VPS ၃
-VPS3_URL = "https://103.114.203.136:8080"
+VPS3_URL = "https://103.114.203.136:2053"
 VPS3_PATH = "dLWnOXijDgbnRhW"
 VPS3_USER = "eIIC3epKrY"
 VPS3_PASS = "G6ifUF2Wi9"
 VPS3_IP = "103.114.203.136"
-VPS3_PORT = "8080"
+VPS3_PORT = "2053"
 VPS3_INBOUND_ID = 1
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# 🚨 ဒေတာ သိမ်းဆည်းရန် ဖိုင်များ
+# ============================================================
+# 💾 ဒေတာ သိမ်းဆည်းရန် ဖိုင်များ
+# ============================================================
 DB_FILE = "users_coin.json"
 HISTORY_FILE = "purchase_history.json"
 ACTIVE_USERS_FILE = "active_users.json"
@@ -91,7 +89,7 @@ def save_data():
 load_data()
 
 # ============================================================
-# 🛠️ Functions
+# 🛠️ Helper Functions
 # ============================================================
 def check_join(user_id):
     try:
@@ -99,8 +97,7 @@ def check_join(user_id):
         if member.status in ['member', 'administrator', 'creator']:
             return True
         return False
-    except Exception as e:
-        print(f"Join Check Error: {e}")
+    except:
         return False
 
 def get_vps_details(vps_choice):
@@ -110,6 +107,27 @@ def get_vps_details(vps_choice):
         return VPS2_URL, VPS2_PATH, VPS2_USER, VPS2_PASS, VPS2_IP, VPS2_PORT, VPS2_INBOUND_ID
     elif vps_choice == "3":
         return VPS3_URL, VPS3_PATH, VPS3_USER, VPS3_PASS, VPS3_IP, VPS3_PORT, VPS3_INBOUND_ID
+
+def create_account_with_auto_switch(start_vps, username, days, gb):
+    vps_order = [str(start_vps)]
+    all_vps = ["1", "2", "3"]
+    for v in all_vps:
+        if v not in vps_order:
+            vps_order.append(v)
+
+    for current_vps in vps_order:
+        success, result = auto_create_vless_account(current_vps, username, days, gb)
+        
+        if success:
+            return True, result, current_vps 
+            
+        if result == "Duplicate":
+            print(f"VPS {current_vps} တွင် '{username}' ရှိပြီးသားဖြစ်၍ နောက် VPS သို့ ပြောင်းမည်...")
+            continue 
+        else:
+            return False, result, current_vps 
+            
+    return False, "VPS အားလုံးတွင် ဒီအကောင့်နာမည် ရှိနေပြီး ဖြစ်ပါသည်။", start_vps
 
 def auto_create_vless_account(vps_choice, username, days, gb):
     try:
@@ -224,13 +242,13 @@ def delete_vless_account(vps_choice, username):
                 break
         
         if not target_uuid:
-            return False, f"'{username}' ဆိုတဲ့ အကောင့်ကို ရှာမတွေ့ပါ။"
+            return False, f"'{username}' ဆိုတဲ့ အကောင့်ကို VPS {vps_choice} မှာ ရှာမတွေ့ပါ။"
 
         del_url = f"{url}/{path}/panel/api/inbounds/{inbound_id}/delClient/{target_uuid}"
         res_del = session.post(del_url, timeout=15)
         
         if res_del.status_code == 200 and res_del.json().get("success"):
-            return True, f"'{username}' အကောင့်ကို အောင်မြင်စွာ ဖျက်လိုက်ပါပြီ။"
+            return True, f"'{username}' အကောင့်ကို VPS {vps_choice} မှ အောင်မြင်စွာ ဖျက်လိုက်ပါပြီ။"
         else:
             return False, f"ဖျက်လို့မရပါ: {res_del.text}"
             
@@ -240,7 +258,6 @@ def delete_vless_account(vps_choice, username):
 # ============================================================
 # 📱 Telegram Bot Handlers
 # ============================================================
-
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = str(message.from_user.id)
@@ -254,7 +271,6 @@ def send_welcome(message):
         show_main_menu(message.chat.id, user_id)
     else:
         markup = types.InlineKeyboardMarkup()
-        # 🚨 ဒီနေရာမှာ သင့် Channel Link ကို သုံးထားပါတယ်
         markup.add(types.InlineKeyboardButton(text="📢 Channel Join ရန်", url=CHANNEL_LINK))
         markup.add(types.InlineKeyboardButton(text="✅ Join ပြီးပါပြီ", callback_data="check_join"))
         
@@ -294,9 +310,6 @@ def show_main_menu(chat_id, user_id):
     )
     bot.send_message(chat_id, welcome_text, reply_markup=markup, parse_mode='Markdown')
 
-# ============================================================
-# Admin အတွက် အကောင့်ထုတ်ပေးသည့် စနစ်
-# ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "admin_create")
 def admin_create_menu(call):
     if call.from_user.id != ADMIN_ID: return
@@ -345,13 +358,13 @@ def admin_get_days(message, vps_num, account_name):
     gb = days * 2
     bot.reply_to(message, "⏳ အကောင့်ဖန်တီးနေသည်...")
     
-    success, result = auto_create_vless_account(vps_num, account_name, days, gb)
+    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days, gb)
 
     if success:
         bot.send_message(
             message.chat.id, 
             f"🎉 **အကောင့်ဖန်တီးပြီးပါပြီ!**\n\n"
-            f"🌐 **VPS:** {vps_num}\n"
+            f"🌐 **ထုတ်ပေးလိုက်သည့် VPS:** VPS {final_vps}\n"
             f"📁 **အကောင့်:** `{account_name}`\n"
             f"⏳ **သက်တမ်း:** {days} ရက်\n"
             f"📦 **Data ပမာဏ:** {gb} GB\n\n"
@@ -361,9 +374,6 @@ def admin_get_days(message, vps_num, account_name):
     else:
         bot.send_message(message.chat.id, f"⚠️ Error: အကောင့်ဖန်တီးမရပါ။\n{result}")
 
-# ============================================================
-# VPS အတွင်း အကောင့်စာရင်း စစ်ဆေးခြင်း
-# ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "admin_check_vps_list")
 def admin_check_vps_list(call):
     if call.from_user.id != ADMIN_ID: return
@@ -409,7 +419,7 @@ def admin_process_check_list(call):
         msg += f"{i}. `{email}` (ကုန်ဆုံး: {expire_date})\n"
         
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🗑️ အကောင့်ဖျက်ရန်", callback_data=f"delete_client_{vps_num}"))
+    markup.add(types.InlineKeyboardButton(text=f"🗑️ VPS {vps_num} မှ အကောင့်ဖျက်ရန်", callback_data=f"delete_client_{vps_num}"))
     markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="admin_check_vps_list"))
     
     if len(msg) > 4000:
@@ -422,9 +432,14 @@ def admin_process_check_list(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_client_'))
 def admin_delete_client_prompt(call):
     if call.from_user.id != ADMIN_ID: return
+    
     vps_num = call.data.replace("delete_client_", "")
     
-    bot.send_message(call.message.chat.id, f"🗑️ VPS {vps_num} မှ ဖျက်လိုသော အကောင့်နာမည်ကို ရိုက်ထည့်ပါ -")
+    bot.send_message(
+        call.message.chat.id, 
+        f"🗑️ **VPS {vps_num}** မှ ဖျက်လိုသော အကောင့်နာမည်ကို ရိုက်ထည့်ပါ -"
+    )
+    
     bot.register_next_step_handler_by_chat_id(call.message.chat.id, admin_delete_client, vps_num)
 
 def admin_delete_client(message, vps_num):
@@ -438,9 +453,6 @@ def admin_delete_client(message, vps_num):
     else:
         bot.send_message(message.chat.id, f"⚠️ {result}")
 
-# ============================================================
-# သူငယ်ချင်းအတွက် လင့်ခ်တောင်းသည့် စနစ်
-# ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "buy_for_friend")
 def buy_for_friend_menu(call):
     markup = types.InlineKeyboardMarkup()
@@ -482,7 +494,7 @@ def back_main(call):
     show_main_menu(call.message.chat.id, user_id)
 
 # ============================================================
-# Admin Commands
+# 🚨 Admin Commands
 # ============================================================
 @bot.message_handler(commands=['help'])
 def help_command(message):
@@ -493,8 +505,7 @@ def help_command(message):
     help_text = (
         "🤖 **Admin အတွက် အသုံးပြုနိုင်သော Command များ**\n\n"
         "🔹 **/help** - ဒီစာမျက်နှာကို ဖွင့်ရန်။\n\n"
-        "🔹 **/online** - လက်ရှိ Bot ကို သုံးနေတဲ့ လူဦးရေကို ကြည့်ရန်။\n\n"
-        "🔹 **/history** - ဝယ်ယူမှု မှတ်တမ်းများကို ကြည့်ရန်။"
+                "🔹 **/history** - ဝယ်ယူမှု မှတ်တမ်းများကို ကြည့်ရန်။"
     )
     bot.reply_to(message, help_text, parse_mode='Markdown')
 
@@ -508,7 +519,7 @@ def online_users_command(message):
     text = (
         "📊 **Bot အသုံးပြုသူ အခြေအနေ**\n\n"
         f"👥 **စုစုပေါင်း အသုံးပြုသူ:** {total_users} ယောက်\n"
-             f"🟢 **လက်ရှိ အွန်လိုင်း (ရောက်သုံးနေသူ):** {online_count} ယောက်"
+        f"🟢 **လက်ရှိ အွန်လိုင်း (ရောက်သုံးနေသူ):** {online_count} ယောက်"
     )
     bot.reply_to(message, text, parse_mode='Markdown')
 
