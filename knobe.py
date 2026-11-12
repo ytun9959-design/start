@@ -12,17 +12,18 @@ import threading
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ============================================================
-# ⚙️ အချက်အလက်များ
+# ⚙️ သင့် Bot ၏ အချက်အလက်များ
 # ============================================================
-BOT_TOKEN = "9058833367:AAH3q2p_lo0wu-vEZ9H03DhPD1mxQB7YWj4"
+BOT_TOKEN = "9058833367:AAGe4a5-PXaQAZJRnuy91AUc36U7zZH_2cM"
 ADMIN_ID = 5617375002
-
-# Channel နှင့် Admin အသစ်
-ADMIN_CONTACT = "@Knobe21" 
+ADMIN_CONTACT = "@Kenobe21" 
 CHANNEL_LINK = "https://t.me/Skyblue021"
-CHANNEL_USERNAME = "@Skyblue021" 
+CHANNEL_USERNAME = "@Skyblue021"
 BOT_LINK = "https://t.me/SkyBlueFreevpn_bot?start="
 
+# ============================================================
+# 🌐 VPS အချက်အလက်များ
+# ============================================================
 VPS1_URL = "https://157.85.96.190:2083"
 VPS1_PATH = "U6lL3EX7t2yq0q6"
 VPS1_USER = "eYJmFn4UNl"
@@ -49,6 +50,9 @@ VPS3_INBOUND_ID = 1
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# ============================================================
+# 💾 ဒေတာ သိမ်းဆည်းရန် ဖိုင်များ
+# ============================================================
 DB_FILE = "users_coin.json"
 HISTORY_FILE = "purchase_history.json"
 ACTIVE_USERS_FILE = "active_users.json"
@@ -85,6 +89,9 @@ def save_data():
 
 load_data()
 
+# ============================================================
+# 🛠️ Helper Functions
+# ============================================================
 def check_join(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
@@ -102,7 +109,7 @@ def get_vps_details(vps_choice):
     elif vps_choice == "3":
         return VPS3_URL, VPS3_PATH, VPS3_USER, VPS3_PASS, VPS3_IP, VPS3_PORT, VPS3_INBOUND_ID
 
-def create_account_with_auto_switch(start_vps, username, days):
+def create_account_with_auto_switch(start_vps, username, days, gb):
     vps_order = [str(start_vps)]
     all_vps = ["1", "2", "3"]
     for v in all_vps:
@@ -110,7 +117,7 @@ def create_account_with_auto_switch(start_vps, username, days):
             vps_order.append(v)
 
     for current_vps in vps_order:
-        success, result = auto_create_vless_account(current_vps, username, days)
+        success, result = auto_create_vless_account(current_vps, username, days, gb)
         
         if success:
             return True, result, current_vps 
@@ -123,7 +130,7 @@ def create_account_with_auto_switch(start_vps, username, days):
             
     return False, "VPS အားလုံးတွင် ဒီအကောင့်နာမည် ရှိနေပြီး ဖြစ်ပါသည်။", start_vps
 
-def auto_create_vless_account(vps_choice, username, days):
+def auto_create_vless_account(vps_choice, username, days, gb):
     try:
         url, path, user, pw, ip, port, inbound_id = get_vps_details(vps_choice)
         
@@ -141,7 +148,7 @@ def auto_create_vless_account(vps_choice, username, days):
         expire_time = int((datetime.datetime.now() + datetime.timedelta(days=days)).timestamp() * 1000)
         new_uuid = str(uuid.uuid4())
         
-        total_gb_bytes = 0 
+        total_gb_bytes = int(gb) * 1073741824 
         
         add_url = f"{url}/{path}/panel/api/inbounds/addClient"
         
@@ -150,7 +157,7 @@ def auto_create_vless_account(vps_choice, username, days):
                 "id": new_uuid,
                 "flow": "",
                 "email": username,
-                "limitIp": 0, 
+                "limitIp": 1, 
                 "totalGB": total_gb_bytes, 
                 "expiryTime": expire_time,
                 "enable": True,
@@ -168,7 +175,7 @@ def auto_create_vless_account(vps_choice, username, days):
         response = session.post(add_url, json=payload, headers=headers, timeout=15)
         
         if response.status_code == 200 and response.json().get("success"):
-            vless_link = f"vless://{new_uuid}@{ip}:{port}?type=ws&encryption=none&path={path if path else '/'}&host={ip}&security=none#{username}"
+            vless_link = f"vless://{new_uuid}@{ip}:{port}?type=ws&encryption=none&path={path if path else '/'}&host={ip}&security=none&fp=chrome#{username}"
             return True, vless_link
         else:
             if "Duplicate email" in response.text:
@@ -401,7 +408,7 @@ def user_get_days(message, vps_num, account_name):
         
     bot.reply_to(message, "⏳ သင့်အတွက် VPN အကောင့် ဖန်တီးနေသည်...")
     
-    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days)
+    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days, 0)
 
     if success:
         bot.send_message(
@@ -467,7 +474,7 @@ def admin_get_days(message, vps_num, account_name):
         
     bot.reply_to(message, "⏳ အကောင့်ဖန်တီးနေသည်...")
     
-    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days)
+    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days, 0)
 
     if success:
         bot.send_message(
@@ -484,7 +491,7 @@ def admin_get_days(message, vps_num, account_name):
         bot.send_message(message.chat.id, f"⚠️ Error: အကောင့်ဖန်တီးမရပါ။\n{result}")
 
 # ============================================================
-# VPS အတွင်း အကောင့်စာရင်း စစ်ဆေးခြင်း
+# VPS အတွင်း အကောင့်စာရင်း စစ်ဆေးခြင်း (ကျန်ရှိသည့် ရက်များပါ တွက်ချက်ပြသမည်)
 # ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "admin_check_vps_list")
 def admin_check_vps_list(call):
@@ -518,17 +525,36 @@ def admin_process_check_list(call):
         bot.edit_message_text(f"📁 VPS {vps_num} မှာ VPN အကောင့် မရှိပါ။", call.message.chat.id, call.message.message_id)
         return
         
+    # လက်ရှိ အချိန် (UTC)
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    
     msg = f"📋 **VPS {vps_num} အတွင်း အကောင့်စာရင်း (စုစုပေါင်း {len(clients)} ခု)**\n\n"
+    
     for i, c in enumerate(clients, 1):
         email = c.get("email", "Unknown")
         expiry = c.get("expiryTime", 0)
+        
         if expiry == 0:
-            expire_date = "မကုန်ဆုံးပါ"
+            expire_date = "မကုန်ဆုံးပါ (Unlimited)"
         else:
             exp_utc = datetime.datetime.fromtimestamp(expiry / 1000, tz=datetime.timezone.utc)
             exp_mm = exp_utc + datetime.timedelta(hours=6, minutes=30)
             expire_date = exp_mm.strftime('%Y-%m-%d %H:%M')
-        msg += f"{i}. `{email}` (ကုန်ဆုံး: {expire_date})\n"
+            
+            # ကျန်ရှိသည့် အချိန်ကို တွက်ချက်ခြင်း
+            time_left = exp_utc - now_utc
+            total_seconds = time_left.total_seconds()
+            
+            if total_seconds > 0:
+                days_left = int(total_seconds // (24 * 3600))
+                hours_left = int((total_seconds % (24 * 3600)) // 3600)
+                remaining_text = f"({days_left} ရက် {hours_left} နာရီ ကျန်)"
+            else:
+                remaining_text = "(သက်တမ်းကုန်ဆုံးသွားပါပြီ)"
+                
+            expire_date = f"{expire_date} {remaining_text}"
+            
+        msg += f"{i}. `{email}`\n   ⏳ ကုန်ဆုံး: {expire_date}\n\n"
         
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(text=f"🗑️ VPS {vps_num} မှ အကောင့်ဖျက်ရန်", callback_data=f"delete_client_{vps_num}"))
@@ -665,5 +691,3 @@ if __name__ == '__main__':
             print(f"Error တက်သွားပါသည်: {e}")
             print("5 စက္ကန့်အတွင်း ပြန်လည် စတင်ပါမည်...")
             time.sleep(5)
-
-
