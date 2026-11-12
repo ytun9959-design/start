@@ -7,12 +7,10 @@ import json
 import urllib3
 import os
 import time
+import threading
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ============================================================
-# ⚙️ သင့် Bot ၏ အချက်အလက်များ
-# ============================================================
 BOT_TOKEN = "9058833367:AAGe4a5-PXaQAZJRnuy91AUc36U7zZH_2cM"
 ADMIN_ID = 5617375002
 ADMIN_CONTACT = "@Kenobe21" 
@@ -20,9 +18,6 @@ CHANNEL_LINK = "https://t.me/Skyblue021"
 CHANNEL_USERNAME = "@Skyblue021"
 BOT_LINK = "https://t.me/SkyBlueFreevpn_bot?start="
 
-# ============================================================
-# 🌐 VPS အချက်အလက်များ (Port များကို သင့်အချက်အလက်အတိုင်း ပြင်ထားသည်)
-# ============================================================
 VPS1_URL = "https://157.85.96.190:2083"
 VPS1_PATH = "U6lL3EX7t2yq0q6"
 VPS1_USER = "eYJmFn4UNl"
@@ -49,9 +44,6 @@ VPS3_INBOUND_ID = 1
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# ============================================================
-# 💾 ဒေတာ သိမ်းဆည်းရန် ဖိုင်များ
-# ============================================================
 DB_FILE = "users_coin.json"
 HISTORY_FILE = "purchase_history.json"
 ACTIVE_USERS_FILE = "active_users.json"
@@ -88,9 +80,6 @@ def save_data():
 
 load_data()
 
-# ============================================================
-# 🛠️ Helper Functions
-# ============================================================
 def check_join(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
@@ -108,7 +97,7 @@ def get_vps_details(vps_choice):
     elif vps_choice == "3":
         return VPS3_URL, VPS3_PATH, VPS3_USER, VPS3_PASS, VPS3_IP, VPS3_PORT, VPS3_INBOUND_ID
 
-def create_account_with_auto_switch(start_vps, username, days, gb):
+def create_account_with_auto_switch(start_vps, username, days):
     vps_order = [str(start_vps)]
     all_vps = ["1", "2", "3"]
     for v in all_vps:
@@ -116,7 +105,7 @@ def create_account_with_auto_switch(start_vps, username, days, gb):
             vps_order.append(v)
 
     for current_vps in vps_order:
-        success, result = auto_create_vless_account(current_vps, username, days, gb)
+        success, result = auto_create_vless_account(current_vps, username, days)
         
         if success:
             return True, result, current_vps 
@@ -129,7 +118,7 @@ def create_account_with_auto_switch(start_vps, username, days, gb):
             
     return False, "VPS အားလုံးတွင် ဒီအကောင့်နာမည် ရှိနေပြီး ဖြစ်ပါသည်။", start_vps
 
-def auto_create_vless_account(vps_choice, username, days, gb):
+def auto_create_vless_account(vps_choice, username, days):
     try:
         url, path, user, pw, ip, port, inbound_id = get_vps_details(vps_choice)
         
@@ -147,7 +136,7 @@ def auto_create_vless_account(vps_choice, username, days, gb):
         expire_time = int((datetime.datetime.now() + datetime.timedelta(days=days)).timestamp() * 1000)
         new_uuid = str(uuid.uuid4())
         
-        total_gb_bytes = int(gb) * 1073741824 
+        total_gb_bytes = 0 
         
         add_url = f"{url}/{path}/panel/api/inbounds/addClient"
         
@@ -156,7 +145,7 @@ def auto_create_vless_account(vps_choice, username, days, gb):
                 "id": new_uuid,
                 "flow": "",
                 "email": username,
-                "limitIp": 1, 
+                "limitIp": 0, 
                 "totalGB": total_gb_bytes, 
                 "expiryTime": expire_time,
                 "enable": True,
@@ -256,8 +245,35 @@ def delete_vless_account(vps_choice, username):
         return False, str(e)
 
 # ============================================================
+# ⏰ Auto-Delete Expired Accounts (Background Task)
+# ============================================================
+def auto_delete_expired_accounts():
+    while True:
+        try:
+            print("⏳ သက်တမ်းကုန်ဆုံးသွားသော အကောင့်များကို စစ်ဆေးနေသည်...")
+            now_ms = int(datetime.datetime.now().timestamp() * 1000)
+            
+            for vps_choice in ["1", "2", "3"]:
+                success, clients = get_vps_clients(vps_choice)
+                if success and clients:
+                    for client in clients:
+                        expiry = client.get("expiryTime", 0)
+                        if expiry > 0 and expiry < now_ms:
+                            email = client.get("email")
+                            print(f"🗑️ သက်တမ်းကုန်သွားသော '{email}' ကို VPS {vps_choice} မှ ဖျက်နေသည်...")
+                            delete_vless_account(vps_choice, email)
+                            
+        except Exception as e:
+            print(f"Auto-delete error: {e}")
+        
+        time.sleep(1800) 
+
+threading.Thread(target=auto_delete_expired_accounts, daemon=True).start()
+
+# ============================================================
 # 📱 Telegram Bot Handlers
 # ============================================================
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = str(message.from_user.id)
@@ -296,20 +312,113 @@ def verify_join(call):
 
 def show_main_menu(chat_id, user_id):
     markup = types.InlineKeyboardMarkup()
+    
+    # Admin ဖြစ်ရင် Admin ခလုတ်တွေ ပြမယ်
     if int(user_id) == ADMIN_ID:
         markup.add(types.InlineKeyboardButton(text="🛠️ Admin - အကောင့်အသစ်ထုတ်ရန်", callback_data="admin_create"))
         markup.add(types.InlineKeyboardButton(text="📋 VPS အတွင်း အကောင့်စာရင်းကြည့်ရန်", callback_data="admin_check_vps_list"))
-    
-    markup.add(types.InlineKeyboardButton(text="🎁 သူငယ်ချင်းအတွက် လင့်ခ်တောင်းရန်", callback_data="buy_for_friend"))
+    else:
+        # ကျန်တဲ့လူတွေ (Premium ဖြစ်ဖြစ်၊ မဖြစ်ဖြစ်) အတွက် VPN ထုတ်ယူရန် ခလုတ် ပြမယ်
+        markup.add(types.InlineKeyboardButton(text="🎁 VPN အကောင့် ထုတ်ယူရန်", callback_data="user_get_vpn"))
     
     welcome_text = (
         "🌟 **Sky Blue VPN Bot မှ ကြိုဆိုပါတယ်** 🌟\n\n"
-        "📌 **သူငယ်ချင်းကို ပေးသုံးရန်** - သူငယ်ချင်းရဲ့ Telegram ID ကို ထည့်ပြီး လင့်ခ်တောင်းနိုင်ပါတယ်။\n\n"
+        "📌 **VPN အကောင့် အသုံးပြုရန်** - အောက်ပါခလုတ်ကို နှိပ်ပြီး လင့်ခ် ထုတ်ယူနိုင်ပါတယ်။\n\n"
         f"👨‍💻 **အကူအညီလိုပါက:** {ADMIN_CONTACT}\n\n"
         "👇 ရွေးချယ်ပါ -"
     )
     bot.send_message(chat_id, welcome_text, reply_markup=markup, parse_mode='Markdown')
 
+# ============================================================
+# 👤 User အတွက် VPN ထုတ်ယူသည့် စနစ်
+# ============================================================
+@bot.callback_query_handler(func=lambda call: call.data == "user_get_vpn")
+def user_get_vpn_menu(call):
+    user_id = str(call.from_user.id)
+    
+    # Admin က /add နဲ့ ပေးထားတဲ့သူလား စစ်မယ် (users_db ထဲမှာ premium ရှိရင်)
+    is_premium = users_db.get(user_id, {}).get("premium", False)
+    
+    if not is_premium:
+        bot.answer_callback_query(call.id, "❌ သင့်ကို Admin က ခွင့်ပြုချက် မပေးရသေးပါဘူး။", show_alert=True)
+        return
+
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 1 မှ ထုတ်မည်", callback_data="user_vps_1"))
+    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 2 မှ ထုတ်မည်", callback_data="user_vps_2"))
+    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 3 မှ ထုတ်မည်", callback_data="user_vps_3"))
+    markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="back_main"))
+    
+    bot.edit_message_text(
+        "🎁 **VPN အကောင့် ထုတ်ယူရန်**\n\n"
+        "ဘယ် VPS ကနေ ထုတ်ယူမလဲ ရွေးချယ်ပါ -",
+        call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('user_vps_'))
+def user_process_vps(call):
+    user_id = str(call.from_user.id)
+    
+    is_premium = users_db.get(user_id, {}).get("premium", False)
+    if not is_premium: return
+
+    vps_num = call.data.replace("user_vps_", "")
+    
+    bot.edit_message_text(
+        f"✅ VPS {vps_num} ကို ရွေးချယ်ပြီးပါပြီ။\n\n"
+        "📝 ကျေးဇူးပြု၍ သင့်အတွက် **အကောင့်နာမည်** တစ်ခု ရိုက်ထည့်ပါ (ဥပမာ - `myphone`) -",
+        call.message.chat.id, call.message.message_id
+    )
+    bot.register_next_step_handler_by_chat_id(call.message.chat.id, user_get_name, vps_num)
+
+def user_get_name(message, vps_num):
+    user_id = str(message.from_user.id)
+    
+    is_premium = users_db.get(user_id, {}).get("premium", False)
+    if not is_premium: return
+
+    account_name = message.text.strip()
+    bot.reply_to(message, 
+        f"✅ အကောင့်နာမည်: `{account_name}`\n\n"
+        "📅 ကျေးဇူးပြု၍ အသုံးပြုလိုသော **သက်တမ်း (ရက်)** ကို ရိုက်ထည့်ပါ (ဥပမာ - `30`) -",
+        parse_mode='Markdown'
+    )
+    bot.register_next_step_handler(message, user_get_days, vps_num, account_name)
+
+def user_get_days(message, vps_num, account_name):
+    user_id = str(message.from_user.id)
+    
+    is_premium = users_db.get(user_id, {}).get("premium", False)
+    if not is_premium: return
+
+    try:
+        days = int(message.text.strip())
+    except:
+        bot.reply_to(message, "⚠️ ကျေးဇူးပြု၍ ဂဏန်းသက်သက်သာ ရိုက်ထည့်ပါ (ဥပမာ - 30)။")
+        bot.register_next_step_handler(message, user_get_days, vps_num, account_name)
+        return
+        
+    bot.reply_to(message, "⏳ သင့်အတွက် VPN အကောင့် ဖန်တီးနေသည်...")
+    
+    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days)
+
+    if success:
+        bot.send_message(
+            message.chat.id, 
+            f"🎉 **VPN အကောင့် ဖန်တီးပြီးပါပြီ!**\n\n"
+            f"🌐 **VPS:** {final_vps}\n"
+            f"📁 **အကောင့်:** `{account_name}`\n"
+            f"⏳ **သက်တမ်း:** {days} ရက်\n"
+            f"📦 **Data ပမာဏ:** Unlimited\n\n"
+            f"📄 **လင့်ခ်:**\n`{result}`", 
+            parse_mode='Markdown'
+        )
+    else:
+        bot.send_message(message.chat.id, f"⚠️ Error: အကောင့်ဖန်တီးမရပါ။\n{result}")
+
+# ============================================================
+# 🛠️ Admin - အကောင့်ထုတ်ပေးသည့် စနစ်
+# ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "admin_create")
 def admin_create_menu(call):
     if call.from_user.id != ADMIN_ID: return
@@ -355,25 +464,27 @@ def admin_get_days(message, vps_num, account_name):
         bot.register_next_step_handler(message, admin_get_days, vps_num, account_name)
         return
         
-    gb = days * 2
     bot.reply_to(message, "⏳ အကောင့်ဖန်တီးနေသည်...")
     
-    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days, gb)
+    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days)
 
     if success:
         bot.send_message(
             message.chat.id, 
             f"🎉 **အကောင့်ဖန်တီးပြီးပါပြီ!**\n\n"
-            f"🌐 **ထုတ်ပေးလိုက်သည့် VPS:** VPS {final_vps}\n"
+            f"🌐 **VPS:** {final_vps}\n"
             f"📁 **အကောင့်:** `{account_name}`\n"
             f"⏳ **သက်တမ်း:** {days} ရက်\n"
-            f"📦 **Data ပမာဏ:** {gb} GB\n\n"
+            f"📦 **Data ပမာဏ:** Unlimited\n\n"
             f"📄 **လင့်ခ်:**\n`{result}`", 
             parse_mode='Markdown'
         )
     else:
         bot.send_message(message.chat.id, f"⚠️ Error: အကောင့်ဖန်တီးမရပါ။\n{result}")
 
+# ============================================================
+# VPS အတွင်း အကောင့်စာရင်း စစ်ဆေးခြင်း
+# ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "admin_check_vps_list")
 def admin_check_vps_list(call):
     if call.from_user.id != ADMIN_ID: return
@@ -403,9 +514,7 @@ def admin_process_check_list(call):
         return
         
     if not clients:
-        bot.edit_message_text(f"📁 VPS {vps_num} မှာ VPN အကောင့် မရှိပါ။", call.message.chat.id, call.message.message_id)
-        return
-        
+        bot.edit_message_text(f"📁 VPS {vps_num} မှာ VPN အကောင့် မရှိပါ။", call.message.chat.id, call.m
     msg = f"📋 **VPS {vps_num} အတွင်း အကောင့်စာရင်း (စုစုပေါင်း {len(clients)} ခု)**\n\n"
     for i, c in enumerate(clients, 1):
         email = c.get("email", "Unknown")
@@ -453,49 +562,12 @@ def admin_delete_client(message, vps_num):
     else:
         bot.send_message(message.chat.id, f"⚠️ {result}")
 
-@bot.callback_query_handler(func=lambda call: call.data == "buy_for_friend")
-def buy_for_friend_menu(call):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="back_main"))
-    
-    bot.edit_message_text(
-        f"🎁 **သူငယ်ချင်းအတွက် လင့်ခ်တောင်းရန်**\n\n"
-        "📝 ကျေးဇူးပြု၍ သူငယ်ချင်းရဲ့ **Telegram ID** ကို ရိုက်ထည့်ပါ (ဥပမာ - `8823368996`) -",
-        call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
-    )
-    bot.register_next_step_handler_by_chat_id(call.message.chat.id, get_friend_id)
-
-def get_friend_id(message):
-    user_id = str(message.from_user.id)
-    friend_id = message.text.strip()
-    
-    bot.reply_to(message, f"✅ သင့်တောင်းခံမှုကို လက်ခံရရှိပါပြီ။\n\nAdmin က သင့်သူငယ်ချင်း (ID: `{friend_id}`) အတွက် အကောင့်ထုတ်ပေးပါလိမ့်မယ်။", parse_mode='Markdown')
-    
-    admin_markup = types.InlineKeyboardMarkup()
-    admin_markup.add(types.InlineKeyboardButton(text="🛠️ ယခု အကောင့်ထုတ်ပေးမည်", callback_data="admin_create"))
-    
-    bot.send_message(
-        ADMIN_ID, 
-        f"🔔 **သူငယ်ချင်းအတွက် လင့်ခ်တောင်းခံမှု**\n\n"
-        f"👤 တောင်းခံသူ: {message.from_user.full_name} (ID: {user_id})\n"
-        f"🎯 သူငယ်ချင်း ID: `{friend_id}`",
-        reply_markup=admin_markup,
-        parse_mode='Markdown'
-    )
-    try:
-        bot.send_message(friend_id, "🎉 သင့်သူငယ်ချင်းက သင့်အတွက် VPN လင့်ခ်တစ်ခု တောင်းခံထားပါတယ်။ Admin က မကြာမီ ပို့ပေးပါလိမ့်မယ်။")
-    except:
-        pass
-
 @bot.callback_query_handler(func=lambda call: call.data == "back_main")
 def back_main(call):
     user_id = str(call.from_user.id)
     bot.delete_message(call.message.chat.id, call.message.message_id)
     show_main_menu(call.message.chat.id, user_id)
 
-# ============================================================
-# 🚨 Admin Commands
-# ============================================================
 @bot.message_handler(commands=['help'])
 def help_command(message):
     if message.from_user.id != ADMIN_ID: 
@@ -504,8 +576,8 @@ def help_command(message):
         
     help_text = (
         "🤖 **Admin အတွက် အသုံးပြုနိုင်သော Command များ**\n\n"
-        "🔹 **/help** - ဒီစာမျက်နှာကို ဖွင့်ရန်။\n\n"
-        "🔹 **/online** - လက်ရှိ Bot ကို သုံးနေတဲ့ လူဦးရေကို ကြည့်ရန်။\n\n"
+        "🔹 **/add [ID] unlimited** - သူငယ်ချင်းကို Premium ပေးရန်။\n"
+        "🔹 **/online** - လက်ရှိ Bot ကို သုံးနေတဲ့ လူဦးရေကို ကြည့်ရန်။\n"
         "🔹 **/history** - ဝယ်ယူမှု မှတ်တမ်းများကို ကြည့်ရန်။"
     )
     bot.reply_to(message, help_text, parse_mode='Markdown')
@@ -537,7 +609,7 @@ def history_command(message):
             f"👤 User: `{item['user_id']}`\n"
             f"🌐 VPS: {item.get('vps', 'N/A')}\n"
             f"🎫 အကောင့်: `{item['username']}`\n"
-            f"📅 ရက်: {item['days']} ရက် | 📦 Data: {item.get('gb', 'N/A')} GB\n"
+            f"📅 ရက်: {item['days']} ရက်\n"
             f"🕒 {item['date']}\n"
             f"--- --- ---\n"
         )
@@ -548,9 +620,6 @@ def history_command(message):
     else:
         bot.send_message(message.chat.id, msg, parse_mode='Markdown')
 
-# ============================================================
-# 🚀 Bot စတင်ခြင်း
-# ============================================================
 if __name__ == '__main__':
     print("🤖 Sky Blue Multi-VPS Bot စတင်နေသည်...")
     while True:
