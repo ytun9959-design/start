@@ -11,11 +11,16 @@ import threading
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-BOT_TOKEN = "9058833367:AAGe4a5-PXaQAZJRnuy91AUc36U7zZH_2cM"
+# ============================================================
+# ⚙️ အချက်အလက်များ
+# ============================================================
+BOT_TOKEN = "9058833367:AAH3q2p_lo0wu-vEZ9H03DhPD1mxQB7YWj4"
 ADMIN_ID = 5617375002
-ADMIN_CONTACT = "@Kenobe21" 
+
+# Channel နှင့် Admin အသစ်
+ADMIN_CONTACT = "@Knobe21" 
 CHANNEL_LINK = "https://t.me/Skyblue021"
-CHANNEL_USERNAME = "@Skyblue021"
+CHANNEL_USERNAME = "@Skyblue021" 
 BOT_LINK = "https://t.me/SkyBlueFreevpn_bot?start="
 
 VPS1_URL = "https://157.85.96.190:2083"
@@ -269,7 +274,6 @@ def auto_delete_expired_accounts():
         time.sleep(1800) 
 
 threading.Thread(target=auto_delete_expired_accounts, daemon=True).start()
-
 # ============================================================
 # 📱 Telegram Bot Handlers
 # ============================================================
@@ -313,12 +317,10 @@ def verify_join(call):
 def show_main_menu(chat_id, user_id):
     markup = types.InlineKeyboardMarkup()
     
-    # Admin ဖြစ်ရင် Admin ခလုတ်တွေ ပြမယ်
     if int(user_id) == ADMIN_ID:
         markup.add(types.InlineKeyboardButton(text="🛠️ Admin - အကောင့်အသစ်ထုတ်ရန်", callback_data="admin_create"))
         markup.add(types.InlineKeyboardButton(text="📋 VPS အတွင်း အကောင့်စာရင်းကြည့်ရန်", callback_data="admin_check_vps_list"))
     else:
-        # ကျန်တဲ့လူတွေ (Premium ဖြစ်ဖြစ်၊ မဖြစ်ဖြစ်) အတွက် VPN ထုတ်ယူရန် ခလုတ် ပြမယ်
         markup.add(types.InlineKeyboardButton(text="🎁 VPN အကောင့် ထုတ်ယူရန်", callback_data="user_get_vpn"))
     
     welcome_text = (
@@ -336,7 +338,6 @@ def show_main_menu(chat_id, user_id):
 def user_get_vpn_menu(call):
     user_id = str(call.from_user.id)
     
-    # Admin က /add နဲ့ ပေးထားတဲ့သူလား စစ်မယ် (users_db ထဲမှာ premium ရှိရင်)
     is_premium = users_db.get(user_id, {}).get("premium", False)
     
     if not is_premium:
@@ -514,7 +515,9 @@ def admin_process_check_list(call):
         return
         
     if not clients:
-        bot.edit_message_text(f"📁 VPS {vps_num} မှာ VPN အကောင့် မရှိပါ။", call.message.chat.id, call.m
+        bot.edit_message_text(f"📁 VPS {vps_num} မှာ VPN အကောင့် မရှိပါ။", call.message.chat.id, call.message.message_id)
+        return
+        
     msg = f"📋 **VPS {vps_num} အတွင်း အကောင့်စာရင်း (စုစုပေါင်း {len(clients)} ခု)**\n\n"
     for i, c in enumerate(clients, 1):
         email = c.get("email", "Unknown")
@@ -567,6 +570,39 @@ def back_main(call):
     user_id = str(call.from_user.id)
     bot.delete_message(call.message.chat.id, call.message.message_id)
     show_main_menu(call.message.chat.id, user_id)
+
+# ============================================================
+# 🛠️ Admin Commands
+# ============================================================
+@bot.message_handler(commands=['add'])
+def admin_add_premium(message):
+    if message.from_user.id != ADMIN_ID: return
+    
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            bot.reply_to(message, "⚠️ ပုံစံမှားနေပါတယ်။ ဒီလိုရိုက်ပါ - `/add [Telegram_ID] unlimited`")
+            return
+            
+        target_id = args[1]
+        plan = args[2].lower() if len(args) > 2 else "unlimited"
+        
+        if target_id not in users_db:
+            users_db[target_id] = {"joined": False, "vpn": [], "premium": True}
+        else:
+            users_db[target_id]["premium"] = True
+            
+        save_data()
+        
+        bot.reply_to(message, f"✅ အောင်မြင်ပါသည်။ ID `{target_id}` ကို Premium (Unlimited) အဖြစ် သတ်မှတ်ပြီးပါပြီ။")
+        
+        try:
+            bot.send_message(target_id, "🎉 သင့်ကို Admin မှ VPN အသုံးပြုခွင့် (Unlimited) ပေးအပ်လိုက်ပါပြီ။ ယခု Bot ကို `/start` နှိပ်ပြီး အကောင့် ထုတ်ယူနိုင်ပါပြီ။")
+        except:
+            bot.reply_to(message, f"⚠️ ဒါပေမယ့် အဲ့ဒီ User ဆီကို Message ပို့လို့မရပါဘူး။ (သူက Bot ကို အရင် /start နှိပ်ထားဖို့ လိုပါတယ်)")
+            
+    except Exception as e:
+        bot.reply_to(message, f"⚠️ Error: {e}")
 
 @bot.message_handler(commands=['help'])
 def help_command(message):
@@ -629,3 +665,5 @@ if __name__ == '__main__':
             print(f"Error တက်သွားပါသည်: {e}")
             print("5 စက္ကန့်အတွင်း ပြန်လည် စတင်ပါမည်...")
             time.sleep(5)
+
+
