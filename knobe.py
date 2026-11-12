@@ -14,7 +14,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ============================================================
 # ⚙️ သင့် Bot ၏ အချက်အလက်များ
 # ============================================================
-BOT_TOKEN = "9058833367:AAGe4a5-PXaQAZJRnuy91AUc36U7zZH_2cM"
+BOT_TOKEN = "9058833367:AAH3q2p_lo0wu-vEZ9H03DhPD1mxQB7YWj4"
 ADMIN_ID = 5617375002
 ADMIN_CONTACT = "@Kenobe21" 
 CHANNEL_LINK = "https://t.me/Skyblue021"
